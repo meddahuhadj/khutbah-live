@@ -236,7 +236,9 @@ doit tourner sur **une seule instance persistante**, pas en serverless.
 
 1. **Render** (le plus simple) : un `render.yaml` est fourni — « New →
    Blueprint → connecter le dépôt » puis renseigner `GEMINI_API_KEY` (secret)
-   dans le dashboard. Plan *Starter* (instance toujours active), sonde `/healthz`.
+   dans le dashboard. Plan *Free* (gratuit, s'endort après 15 min
+   d'inactivité ; pour un direct garanti sans aucune mise en veille,
+   passez au plan *Starter*), sonde `/healthz`.
 2. **Railway / Fly.io** : pusher le dépôt, le `Dockerfile` est détecté
    automatiquement, `PORT` est injecté, ajouter `GEMINI_API_KEY` comme
    variable d'environnement.

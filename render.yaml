@@ -5,7 +5,7 @@ services:
   - type: web
     name: khutbah-live
     runtime: docker
-    plan: starter
+    plan: free
     autoDeploy: true
     healthCheckPath: /healthz
     dockerfilePath: ./Dockerfile
