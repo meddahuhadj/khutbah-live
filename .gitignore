@@ -1,0 +1,16 @@
+# Env
+backend/.env
+backend/.venv/
+**/__pycache__/
+*.pyc
+
+# Plateforme
+.vercel/
+node_modules/
+
+# OS / éditeur
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

@@ -1,0 +1,20 @@
+# Artefacts locaux / secrets
+backend/.env
+backend/.venv/
+**/__pycache__/
+*.pyc
+.venv/
+
+# Git
+.git/
+.gitignore
+
+# Éditeurs / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Journaux temporaires
+*.log
+npm-debug.log*

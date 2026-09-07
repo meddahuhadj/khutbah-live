@@ -1,0 +1,21 @@
+# Blueprint Render — déploiement du prêche (khutbah) en direct.
+# Une seule instance persistante (WebSockets longs + état en mémoire).
+# Alternative équivalente : imposer ce Dockerfile sur Railway / Fly.io / un VPS.
+services:
+  - type: web
+    name: khutbah-live
+    runtime: docker
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /healthz
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # Secret réglé dans le dashboard Render (jamais commité) :
+      - key: GEMINI_API_KEY
+        sync: false
+      # Facultatif : langues traduites par défaut (ex: "fr,en,nl")
+      - key: DEFAULT_TARGET_LANGS
+        sync: false
+      # Facultatif : URL publique utilisée pour les liens/QR
+      - key: PUBLIC_BASE_URL
+        sync: false
