@@ -14,3 +14,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+# Tests
+.pytest_cache/
+backend/data/quran_raw.json

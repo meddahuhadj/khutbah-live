@@ -150,8 +150,20 @@ def has_api_key() -> bool:
     return bool(API_KEY)
 
 
+# Dernière raison d'échec Gemini, exposée au backend pour informer l'opérateur.
+#   "" = ok/aucune · "no_key" · "quota" (429) · "auth" (401/403) · "server" (5xx)
+#   "network" · "bad_response"
+_last_error = ""
+
+
+def last_error() -> str:
+    return _last_error
+
+
 async def _post_generate(payload: dict) -> dict | None:
+    global _last_error
     if not API_KEY:
+        _last_error = "no_key"
         return None
     url = f"{_BASE}/models/{MODEL}:generateContent"
     params = {"key": API_KEY}
@@ -160,18 +172,23 @@ async def _post_generate(payload: dict) -> dict | None:
         try:
             r = await _http().post(url, params=params, json=payload)
             if r.status_code == 200:
+                _last_error = ""
                 return r.json()
             # 429 / 5xx : on réessaie une fois après une courte pause.
             if r.status_code in (429, 500, 502, 503, 504) and attempt < MAX_RETRIES:
                 await asyncio.sleep(0.8 * (attempt + 1))
                 continue
-            print(f"[gemini] HTTP {r.status_code}: {r.text[:400]}")
+            _last_error = {401: "auth", 403: "auth", 429: "quota"}.get(
+                r.status_code, "server" if r.status_code >= 500 else "bad_response"
+            )
+            print(f"[gemini] HTTP {r.status_code} ({_last_error}): {r.text[:400]}")
             return None
         except (httpx.HTTPError, asyncio.TimeoutError) as exc:  # noqa: PERF203
             last_exc = exc
             if attempt < MAX_RETRIES:
                 await asyncio.sleep(0.6 * (attempt + 1))
                 continue
+    _last_error = "network"
     print(f"[gemini] échec réseau: {last_exc!r}")
     return None
 

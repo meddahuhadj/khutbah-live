@@ -55,6 +55,26 @@ en synthèse vocale dans ses écouteurs. **Rien n'est diffusé en audio dans la 
 - **Mémoire des versets** : le texte exact des versets coraniques (alquran.cloud) est aussi persisté en `localStorage` (capé à 500 entrées) — les versets déjà vus s'affichent **instantanément** après rechargement, même hors réseau.
 - **PWA renforcée** : cache du service worker passé en `v4`, manifeste enrichi (`display_override`, catégories) — l'horloge fait partie de la coquille hors ligne.
 
+### Fiabilité : repli de référence, cause du mode dégradé, tests (v1.7–v1.8)
+
+- **Cause du mode dégradé affichée** : le serveur distingue le type d'échec Gemini (`quota` / `auth` / `server` / `network` / `no_key`) et l'appli l'explique clairement à l'opérateur (toast + moniteur + ligne d'état) au lieu du vague « traduction indisponible ». Ex. quota gratuit épuisé → *« Quota Gemini dépassé… utilisez une autre clé, changez `GEMINI_MODEL` pour `gemini-2.5-flash-lite`, ou activez la facturation. »*
+- **Reconnaissance vocale : échecs rendus visibles** — ligne d'état côté diffuseur (`Écoute active` / `Voix captée` / erreurs typées : réseau, langue non supportée, démarrage impossible), chien de garde 9 s qui conseille « Audio → serveur » / « Manuel », et le VU-mètre ne bloque plus le démarrage.
+- **Contexte non sécurisé détecté** : si l'appli est ouverte sur `http://192.168.x.x` (pas HTTPS), le micro est bloqué par le navigateur → les modes micro sont désactivés, message explicite (« diffusez depuis `http://localhost:8000` ou via un lien HTTPS »).
+- **Lien de partage utilisable** : quand l'imam est sur `localhost`, le serveur réécrit `join_url` **et le QR** avec son **IP LAN** (`socket`), pour que les téléphones du même Wi-Fi puissent rejoindre.
+- **Repli de référence coranique** : quand Gemini renvoie `is_quran=true` mais `quran_ref=null`, le backend cherche le segment dans un **index local du texte coranique** (`backend/data/quran_index.json`, ~711 Kio, sans diacritiques ; **100 % hors-ligne**). Gère les citations partielles et les plages `S:A1-A2` ; la référence retrouvée est marquée « ≈ » (à vérifier). Rebuild : `python scripts/build_quran_index.py`.
+- **Bibliothèque de phrases** (diffuseur) : ~15 formules de khutbah pré-remplies, envoi en un tap, ajout/suppression persistés localement.
+- **Suite de tests `pytest`** : `backend/tests/` (44 tests, Gemini mocké — aucun appel réseau). `pip install -r requirements-dev.txt && pytest`.
+
+### Ordre strict des segments & durcissement mémoire (v1.9)
+
+- **Ordre garanti par `seq`** : chaque room a désormais un **worker asynchrone unique** qui traite les segments finaux **en série** (file `asyncio.Queue`). Avant, chaque segment partait en `create_task` et la diffusion suivait le `await` de traduction — si la traduction de N+1 revenait avant celle de N, l'auditeur recevait 4 après 5 et l'historique s'empilait dans le désordre. Le worker consomme aussi le chemin **audio → serveur** (STT sérialisée) → ordre garanti de bout en bout. Test dédié : traduction du segment 1 volontairement lente, segment 2 instantané → l'auditeur reçoit quand même 1 puis 2.
+- **Backlog borné** : si la parole dépasse la vitesse de traduction, la file est plafonnée (`SEG_QUEUE_MAX`, défaut 24) et **sacrifie le plus ancien segment en attente** pour rester proche du direct (`segments_dropped` dans `/healthz`).
+- **Anti-DoS mémoire** : plafond global `MAX_ROOMS` (défaut 300, sinon `503`), purge des sessions **créées mais jamais démarrées** après `IDLE_ROOM_TTL` (défaut 20 min), janitor toutes les 2 min. Les workers de room sont annulés à la purge et à l'arrêt du serveur.
+- **`/healthz` enrichi** : `rooms`, `rooms_live`, `listeners`, `segments_total`, `segments_dropped`, `gemini_last_error`.
+- **Garde-fou prompt** : un test vérifie que `SYSTEM_PROMPT.md` est bien chargé (≠ prompt court de secours).
+
+> ⚠️ **Sécurité** : ne jamais mettre `backend/.env` (clé Gemini) dans une archive ou un commit — il est déjà dans `.gitignore`. Pour partager le projet : `zip -r projet.zip . -x '*/.venv/*' '*/.git/*' '*.env' 'backend/data/quran_raw.json'`.
+
 ---
 
 ## 1. Architecture

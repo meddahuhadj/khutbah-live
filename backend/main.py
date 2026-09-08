@@ -41,6 +41,7 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
+import quran_index
 import translator
 
 # --------------------------------------------------------------------------- #
@@ -58,7 +59,10 @@ MAX_HISTORY = int(os.getenv("MAX_HISTORY", "40"))
 MAX_LISTENERS = int(os.getenv("MAX_LISTENERS", "1500"))
 MAX_AUDIO_BYTES = int(os.getenv("MAX_AUDIO_BYTES", "2000000"))
 ALLOW_NO_API_KEY = os.getenv("ALLOW_NO_API_KEY", "1") == "1"
-SESSION_TTL = 60 * 60 * 12  # 12 h sans activité -> purge
+SESSION_TTL = 60 * 60 * 12          # 12 h sans activité -> purge
+IDLE_ROOM_TTL = int(os.getenv("IDLE_ROOM_TTL", str(20 * 60)))  # session jamais démarrée
+MAX_ROOMS = int(os.getenv("MAX_ROOMS", "300"))     # plafond global (anti-DoS mémoire)
+SEG_QUEUE_MAX = int(os.getenv("SEG_QUEUE_MAX", "24"))  # backlog max de segments par room
 
 # Langues proposées par l'interface. `ar` = flux original sans traduction.
 SUPPORTED_LANGUAGES: dict[str, str] = {
@@ -102,10 +106,63 @@ class Room:
         self.history: deque[dict] = deque(maxlen=MAX_HISTORY)
         self.audio_source_level = 0.0
         self._lock = asyncio.Lock()
+        # File de segments *traités en série* : garantit que la diffusion et
+        # l'historique restent strictement dans l'ordre des `seq`, même si la
+        # traduction du segment N+1 revient avant celle de N.
+        self._seg_q: asyncio.Queue = asyncio.Queue(maxsize=SEG_QUEUE_MAX)
+        self._worker: asyncio.Task | None = None
+        self.dropped_segments = 0
         # Personnalisation communautaire (renseignée à la création de session).
         self.glossary: str = ""
         self.mosque_name: str = ""
         self.default_langs: list[str] = list(DEFAULT_TARGET_LANGS)
+
+    # --- file de segments ordonnée ---------------------------------------
+    def submit_segment(self, *, text: str | None = None, manual: bool = False,
+                       audio: bytes | None = None, mime: str = "audio/webm") -> None:
+        item = {"text": text, "manual": manual, "audio": audio, "mime": mime}
+        if self._worker is None or self._worker.done():
+            self._worker = asyncio.create_task(self._seg_worker())
+        try:
+            self._seg_q.put_nowait(item)
+        except asyncio.QueueFull:
+            # Backlog : la traduction est très en retard. On sacrifie le plus
+            # ancien segment en attente pour rester proche du direct.
+            try:
+                self._seg_q.get_nowait()
+                self._seg_q.task_done()
+                self.dropped_segments += 1
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                self._seg_q.put_nowait(item)
+            except asyncio.QueueFull:
+                self.dropped_segments += 1
+
+    async def _seg_worker(self) -> None:
+        while True:
+            item = await self._seg_q.get()
+            try:
+                text = item["text"]
+                if item["audio"] is not None:
+                    try:
+                        text = await translator.transcribe_audio(item["audio"], item["mime"])
+                    except Exception as exc:
+                        print(f"[stt] {exc!r}")
+                        text = None
+                    if text:
+                        await self.notify_broadcaster({"type": "stt", "text": text})
+                if text:
+                    await process_final_segment(self, text, manual=item["manual"])
+            except Exception as exc:  # ne jamais tuer le worker
+                print(f"[seg_worker {self.code}] {exc!r}")
+            finally:
+                self._seg_q.task_done()
+
+    def stop_worker(self) -> None:
+        if self._worker and not self._worker.done():
+            self._worker.cancel()
+        self._worker = None
 
     # --- comptage ------------------------------------------------------------
     @property
@@ -221,6 +278,7 @@ def _phrase_payload(rec: dict, lang: str) -> dict:
         "arabic": rec["arabic"],
         "is_quran": rec["is_quran"],
         "quran_ref": rec["quran_ref"],
+        "quran_ref_guessed": rec.get("quran_ref_guessed", False),
         "is_hadith": rec.get("is_hadith", False),
         "degraded": rec.get("degraded", False),
         "corrected": rec.get("corrected", False),
@@ -238,7 +296,33 @@ def get_room(code: str) -> Room | None:
     return ROOMS.get(code.upper())
 
 
+def _drop_room(code: str) -> None:
+    room = ROOMS.pop(code, None)
+    if room:
+        room.stop_worker()
+
+
+def _purge_stale(now: float | None = None) -> int:
+    """Retire les rooms inactives (jamais démarrées, ou sans personne depuis longtemps)."""
+    now = now or time.time()
+    removed = 0
+    for code, room in list(ROOMS.items()):
+        empty = room.broadcaster is None and room.listener_count == 0
+        if not empty:
+            continue
+        idle_never_started = room.status == "idle" and now - room.created_at > IDLE_ROOM_TTL
+        long_inactive = now - room.last_activity > SESSION_TTL
+        if idle_never_started or long_inactive:
+            _drop_room(code)
+            removed += 1
+    return removed
+
+
 def create_room() -> Room:
+    if len(ROOMS) >= MAX_ROOMS:
+        _purge_stale()
+    if len(ROOMS) >= MAX_ROOMS:
+        raise HTTPException(503, "Trop de sessions actives, réessayez plus tard")
     for _ in range(20):
         code = _gen_code()
         if code not in ROOMS:
@@ -251,13 +335,11 @@ def create_room() -> Room:
 async def _janitor():
     """Purge périodique des sessions inactives."""
     while True:
-        await asyncio.sleep(300)
-        now = time.time()
-        for code, room in list(ROOMS.items()):
-            if room.broadcaster is None and room.listener_count == 0 and (
-                now - room.last_activity > SESSION_TTL
-            ):
-                ROOMS.pop(code, None)
+        await asyncio.sleep(120)
+        try:
+            _purge_stale()
+        except Exception as exc:
+            print(f"[janitor] {exc!r}")
 
 
 # --------------------------------------------------------------------------- #
@@ -302,8 +384,22 @@ async def process_final_segment(room: Room, arabic_text: str, *, manual: bool = 
             "is_hadith": result.get("is_hadith", False),
             "degraded": False, "corrected": False,
         }
+        _fill_quran_ref(rec)
     room.history.append(rec)
     await _broadcast_record(room, rec, manual=manual)
+
+
+def _fill_quran_ref(rec: dict) -> None:
+    """Repli : verset coranique reconnu mais sans référence -> recherche dans l'index local."""
+    if rec.get("is_quran") and not rec.get("quran_ref"):
+        try:
+            ref = quran_index.find_ref(rec.get("arabic") or "")
+        except Exception as exc:
+            print(f"[quran_index] {exc!r}")
+            ref = None
+        if ref:
+            rec["quran_ref"] = ref
+            rec["quran_ref_guessed"] = True
 
 
 async def recorrect_segment(room: Room, seq: int, arabic_text: str):
@@ -330,6 +426,8 @@ async def recorrect_segment(room: Room, seq: int, arabic_text: str):
         rec["quran_ref"] = result.get("quran_ref")
         rec["is_hadith"] = result.get("is_hadith", False)
         rec["degraded"] = False
+        rec.pop("quran_ref_guessed", None)
+        _fill_quran_ref(rec)
     rec["corrected"] = True
     rec["ts"] = int(time.time() * 1000)
     await _broadcast_record(room, rec, corrected=True)
@@ -354,6 +452,7 @@ async def _broadcast_record(room: Room, rec: dict, *, manual: bool = False,
         "is_quran": rec["is_quran"],
         "quran_ref": rec["quran_ref"],
         "degraded": rec.get("degraded", False),
+        "degraded_reason": (translator.last_error() if rec.get("degraded") else ""),
         "corrected": corrected,
         "manual": manual,
     })
@@ -369,6 +468,8 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(_janitor())
     yield
     task.cancel()
+    for room in list(ROOMS.values()):
+        room.stop_worker()
     await translator.aclose()
 
 
@@ -383,25 +484,71 @@ app.add_middleware(
 
 # ----------------------------- REST --------------------------------------- #
 
+import socket
+
 from starlette.requests import Request  # noqa: E402
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", ""}
+
+
+def _lan_ip() -> str | None:
+    """IP LAN de cette machine (celle par laquelle un téléphone du même Wi-Fi peut la joindre)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))       # n'envoie rien : sélectionne juste la route sortante
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        if ip and not ip.startswith("127."):
+            return ip
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127."):
+                return ip
+    except OSError:
+        pass
+    return None
 
 
 def base_url(request: Request) -> str:
-    """URL publique de base (respecte PUBLIC_BASE_URL et les en-têtes de proxy)."""
+    """URL publique de base.
+
+    Priorité : PUBLIC_BASE_URL > en-têtes de proxy (X-Forwarded-*) > Host.
+    Cas particulier : si l'imam ouvre l'appli sur `localhost`, le lien/QR partagé
+    serait inutilisable ailleurs → on le réécrit avec l'IP LAN de la machine.
+    """
     if PUBLIC_BASE_URL:
         return PUBLIC_BASE_URL
     proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host") \
+    fwd_host = request.headers.get("x-forwarded-host")
+    host = fwd_host or request.headers.get("host") \
         or f"{request.url.hostname}:{request.url.port or 8000}"
+
+    if not fwd_host:  # pas derrière un proxy : on peut tenter la réécriture LAN
+        hostname, _, port = host.partition(":")
+        if hostname.lower() in _LOCAL_HOSTS:
+            ip = _lan_ip()
+            if ip:
+                return f"{proto}://{ip}:{port or (str(request.url.port) if request.url.port else '8000')}"
     return f"{proto}://{host}"
 
 
 @app.get("/healthz")
 async def healthz():
+    live = sum(1 for r in ROOMS.values() if r.status == "live")
     return {
         "ok": True,
         "rooms": len(ROOMS),
+        "rooms_live": live,
+        "listeners": sum(r.listener_count for r in ROOMS.values()),
+        "segments_total": sum(r.seq for r in ROOMS.values()),
+        "segments_dropped": sum(r.dropped_segments for r in ROOMS.values()),
         "gemini": translator.has_api_key(),
+        "gemini_last_error": translator.last_error() or None,
         "model": translator.MODEL,
     }
 
@@ -454,11 +601,15 @@ async def api_create_session(request: Request):
             l for l in langs if l in SUPPORTED_LANGUAGES and l != "ar"
         ] or list(DEFAULT_TARGET_LANGS)
 
+    base = base_url(request)
+    join_url = f"{base}/?s={room.code}"
+    _bh = base.split("://", 1)[-1].partition(":")[0].lower()
     return {
         "code": room.code,
         "broadcaster_token": room.token,
         "created_at": room.created_at,
-        "join_url": f"{base_url(request)}/?s={room.code}",
+        "join_url": join_url,
+        "shareable": _bh not in _LOCAL_HOSTS,   # False = lien inutilisable hors de cette machine
         "gemini": translator.has_api_key(),
         "mosque_name": room.mosque_name,
         "target_langs": room.default_langs,
@@ -633,9 +784,7 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
                 text = (msg.get("text") or "").strip()
                 if msg.get("is_final"):
                     if text:
-                        asyncio.create_task(
-                            process_final_segment(room, text, manual=bool(msg.get("manual")))
-                        )
+                        room.submit_segment(text=text, manual=bool(msg.get("manual")))
                 else:
                     # Intérimaire : arabe live poussé à tous, sans traduction.
                     await room.broadcast_all({"type": "interim", "arabic": text})
@@ -649,7 +798,7 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
                 except Exception:
                     audio = b""
                 if 0 < len(audio) <= MAX_AUDIO_BYTES and translator.has_api_key():
-                    asyncio.create_task(_handle_audio_chunk(room, audio, mime))
+                    room.submit_segment(audio=audio, mime=mime)
                 elif len(audio) > MAX_AUDIO_BYTES:
                     await ws.send_text(json.dumps({"type": "error",
                                                    "message": "chunk audio trop volumineux"}))
@@ -707,17 +856,6 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
             room.status = "paused" if room.status == "live" else room.status
             await room.broadcast_all({"type": "session", "status": room.status,
                                       "broadcaster_gone": True})
-
-
-async def _handle_audio_chunk(room: Room, audio: bytes, mime: str):
-    try:
-        text = await translator.transcribe_audio(audio, mime)
-    except Exception as exc:
-        print(f"[stt] {exc!r}")
-        text = None
-    if text:
-        await room.notify_broadcaster({"type": "stt", "text": text})
-        await process_final_segment(room, text)
 
 
 # ----------------------------- WebSocket : auditeur -------------------- #

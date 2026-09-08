@@ -655,6 +655,11 @@
       <button class="big" id="btnCreateSession" style="margin-top:12px" disabled data-i18n="bc_create">Créer la session</button>
       <p id="bc-nokey" class="muted hidden" style="margin-top:10px; color:var(--warn)" data-i18n="bc_nokey">
         Clé Gemini absente : mode dégradé (arabe diffusé sans traduction).</p>
+      <p id="bc-insecure" class="hidden" style="margin-top:12px; padding:10px 12px; border-radius:12px;
+        border:1px solid var(--warn); color:var(--warn); font-size:.82rem; font-weight:600" data-i18n="bc_insecure">
+        Micro bloqué : cette page n'est pas en HTTPS. Pour diffuser la voix de l'imam, ouvrez l'application
+        sur http://localhost:8000 (sur le PC serveur), ou via un lien HTTPS (tunnel). Le mode Manuel et la
+        bibliothèque de phrases restent disponibles.</p>
     </div>
 
     <div id="bc-live" class="hidden">
@@ -664,7 +669,10 @@
         <div class="ruh" aria-hidden="true">۞</div>
         <div class="code-badge" id="bc-code">------</div>
         <img class="qr" id="bc-qr" alt="QR code" />
-        <div class="row">
+        <p id="bc-joinUrl" class="muted" style="font-size:.8rem; word-break:break-all; margin:6px 0 0"></p>
+        <p id="bc-shareWarn" class="hidden" style="font-size:.78rem; color:var(--warn); font-weight:650; margin:8px 0 0"
+           data-i18n="bc_share_warn">Ce lien ne marche que sur cet ordinateur. Ouvrez l'application via l'adresse réseau du PC (http://192.168.x.x:8000) ou configurez PUBLIC_BASE_URL / un tunnel pour les téléphones.</p>
+        <div class="row" style="margin-top:8px">
           <button class="secondary" id="btnCopyLink" data-i18n="bc_copylink">Copier le lien</button>
           <button class="secondary" id="btnShareLink" data-i18n="bc_share">Partager</button>
         </div>
@@ -696,6 +704,8 @@
 
         <label data-i18n="bc_level">Niveau sonore du micro</label>
         <div class="meter"><i id="bc-meter"></i></div>
+        <p id="bc-srStatus" role="status" aria-live="polite" class="hidden"
+           style="font-size:.8rem; margin-top:8px; font-weight:650"></p>
 
         <div class="row" style="margin-top:16px">
           <button class="big" id="btnStart" data-i18n="bc_start">Démarrer</button>
@@ -1091,6 +1101,94 @@ Object.assign(I18N.ar,{ bc_lib:"مكتبة العبارات",
   bc_lib_hint:"اضغط على عبارة لإرسالها فورًا إلى المصلّين (تعمل في كل الأوضاع).",
   bc_lib_add:"عبارة جديدة بالعربية", bc_lib_addbtn:"＋ إضافة", bc_lib_reset:"استعادة القائمة الافتراضية",
   bc_lib_send:"إرسال هذه العبارة", bc_lib_sent:"تمّ إرسال العبارة", bc_lib_nosession:"ابدأ الجلسة أولًا." });
+
+/* --- États de la reconnaissance vocale (diffuseur, v1.7) --- */
+Object.assign(I18N.fr,{
+  sr_st_wait:"Écoute active — parlez pour diffuser…", sr_st_ok:"Voix captée — diffusion en cours",
+  sr_st_manual:"Mode manuel : tapez ou utilisez la bibliothèque de phrases.",
+  sr_st_paused:"En pause.", sr_st_nospeech:"Aucune parole détectée.",
+  sr_network:"La reconnaissance vocale a besoin d'Internet et n'y arrive pas. Passez en « Audio → serveur » ou « Manuel ».",
+  sr_lang:"Cette langue n'est pas prise en charge par la reconnaissance du navigateur. Essayez une autre variante, « Audio → serveur » ou « Manuel ».",
+  sr_error:"Erreur de reconnaissance vocale", sr_startfail:"Impossible de démarrer la reconnaissance vocale. Utilisez « Audio → serveur » ou « Manuel ».",
+  sr_failing:"La reconnaissance vocale ne répond pas. Passez en « Audio → serveur » ou « Manuel ».",
+  sr_nospeech:"Rien n'est capté depuis 9 s. Vérifiez le micro, ou passez en « Audio → serveur » / « Manuel »." });
+Object.assign(I18N.en,{
+  sr_st_wait:"Listening — speak to broadcast…", sr_st_ok:"Voice captured — broadcasting",
+  sr_st_manual:"Manual mode: type or use the phrase library.",
+  sr_st_paused:"Paused.", sr_st_nospeech:"No speech detected.",
+  sr_network:"Browser speech recognition needs the internet and can't reach it. Switch to “Audio → server” or “Manual”.",
+  sr_lang:"This language isn't supported by browser recognition. Try another variant, “Audio → server” or “Manual”.",
+  sr_error:"Speech recognition error", sr_startfail:"Could not start speech recognition. Use “Audio → server” or “Manual”.",
+  sr_failing:"Speech recognition isn't responding. Switch to “Audio → server” or “Manual”.",
+  sr_nospeech:"Nothing captured for 9 s. Check the mic, or switch to “Audio → server” / “Manual”." });
+Object.assign(I18N.nl,{
+  sr_st_wait:"Luisteren — spreek om uit te zenden…", sr_st_ok:"Stem opgevangen — uitzending bezig",
+  sr_st_manual:"Handmatige modus: typ of gebruik de zinnenbibliotheek.",
+  sr_st_paused:"Gepauzeerd.", sr_st_nospeech:"Geen spraak gedetecteerd.",
+  sr_network:"Browserspraakherkenning heeft internet nodig en kan er niet bij. Schakel naar “Audio → server” of “Handmatig”.",
+  sr_lang:"Deze taal wordt niet ondersteund door browserherkenning. Probeer een andere variant, “Audio → server” of “Handmatig”.",
+  sr_error:"Fout bij spraakherkenning", sr_startfail:"Kan spraakherkenning niet starten. Gebruik “Audio → server” of “Handmatig”.",
+  sr_failing:"Spraakherkenning reageert niet. Schakel naar “Audio → server” of “Handmatig”.",
+  sr_nospeech:"9 s niets opgevangen. Controleer de microfoon of schakel naar “Audio → server” / “Handmatig”." });
+Object.assign(I18N.ar,{
+  sr_st_wait:"جارٍ الاستماع — تكلّم للبثّ…", sr_st_ok:"تمّ التقاط الصوت — البثّ جارٍ",
+  sr_st_manual:"الوضع اليدوي: اكتب أو استخدم مكتبة العبارات.",
+  sr_st_paused:"متوقّف مؤقتًا.", sr_st_nospeech:"لم يُكتشف أي كلام.",
+  sr_network:"يحتاج تعرّف الكلام في المتصفّح إلى الإنترنت ولا يصل إليه. انتقل إلى «الصوت → الخادم» أو «يدوي».",
+  sr_lang:"هذه اللغة غير مدعومة في تعرّف المتصفّح. جرّب لهجة أخرى، أو «الصوت → الخادم» أو «يدوي».",
+  sr_error:"خطأ في تعرّف الكلام", sr_startfail:"تعذّر بدء تعرّف الكلام. استخدم «الصوت → الخادم» أو «يدوي».",
+  sr_failing:"تعرّف الكلام لا يستجيب. انتقل إلى «الصوت → الخادم» أو «يدوي».",
+  sr_nospeech:"لم يُلتقط شيء منذ ٩ ثوانٍ. تحقّق من الميكروفون أو انتقل إلى «الصوت → الخادم» / «يدوي»." });
+
+/* --- Partage du lien + contexte non sécurisé (v1.7) --- */
+Object.assign(I18N.fr,{
+  bc_share_warn:"⚠️ Ce lien ne fonctionne que sur cet ordinateur. Pour les téléphones : ouvrez l'application via l'adresse réseau du PC (ex. http://192.168.x.x:8000), ou lancez un tunnel / renseignez PUBLIC_BASE_URL.",
+  bc_insecure:"⚠️ Micro bloqué : cette page n'est pas en HTTPS. Pour diffuser la VOIX de l'imam, ouvrez l'application sur http://localhost:8000 (sur le PC serveur) ou via un lien HTTPS (tunnel type ngrok). Ici, seuls le mode Manuel et la bibliothèque de phrases fonctionnent — c'est pourquoi seul le texte écrit est traduit." });
+Object.assign(I18N.en,{
+  bc_share_warn:"⚠️ This link only works on this computer. For phones: open the app via the PC's network address (e.g. http://192.168.x.x:8000), or run a tunnel / set PUBLIC_BASE_URL.",
+  bc_insecure:"⚠️ Microphone blocked: this page isn't served over HTTPS. To broadcast the imam's VOICE, open the app at http://localhost:8000 (on the server PC) or via an HTTPS link (a tunnel such as ngrok). Here only Manual mode and the phrase library work — that's why only typed text gets translated." });
+Object.assign(I18N.nl,{
+  bc_share_warn:"⚠️ Deze link werkt alleen op deze computer. Voor telefoons: open de app via het netwerkadres van de pc (bv. http://192.168.x.x:8000), of gebruik een tunnel / stel PUBLIC_BASE_URL in.",
+  bc_insecure:"⚠️ Microfoon geblokkeerd: deze pagina wordt niet via HTTPS geserveerd. Om de STEM van de imam uit te zenden, open de app op http://localhost:8000 (op de server-pc) of via een HTTPS-link (een tunnel zoals ngrok). Hier werken alleen de handmatige modus en de zinnenbibliotheek — daarom wordt alleen getypte tekst vertaald." });
+Object.assign(I18N.ar,{
+  bc_share_warn:"⚠️ هذا الرابط يعمل على هذا الحاسوب فقط. للهواتف: افتح التطبيق عبر عنوان الشبكة للحاسوب (مثل http://192.168.x.x:8000)، أو شغّل نفقًا / اضبط PUBLIC_BASE_URL.",
+  bc_insecure:"⚠️ الميكروفون محظور: هذه الصفحة ليست على HTTPS. لبثّ صوت الإمام، افتح التطبيق على http://localhost:8000 (على حاسوب الخادم) أو عبر رابط HTTPS (نفق مثل ngrok). هنا يعمل الوضع اليدوي ومكتبة العبارات فقط — لذلك لا يُترجَم إلا النص المكتوب." });
+
+/* --- Raisons du mode dégradé (traduction Gemini) --- */
+Object.assign(I18N.fr,{
+  deg_quota:"Quota Gemini dépassé — la clé gratuite est épuisée. Attendez la réinitialisation (quotidienne, ~9 h heure de Paris), utilisez une autre clé, ou activez la facturation. L'arabe continue d'être diffusé.",
+  deg_auth:"Clé Gemini invalide ou refusée. Vérifiez GEMINI_API_KEY dans backend/.env.",
+  deg_server:"Gemini est momentanément indisponible (erreur serveur). Réessai automatique.",
+  deg_network:"Le serveur n'arrive pas à joindre Gemini (réseau/Internet).",
+  deg_nokey:"Aucune clé Gemini configurée — traduction désactivée.",
+  deg_generic:"Traduction indisponible (mode dégradé) — l'arabe est diffusé sans traduction." });
+Object.assign(I18N.en,{
+  deg_quota:"Gemini quota exceeded — the free key is used up. Wait for the daily reset (~midnight US Pacific), use another key, or enable billing. Arabic is still relayed.",
+  deg_auth:"Gemini key invalid or rejected. Check GEMINI_API_KEY in backend/.env.",
+  deg_server:"Gemini is temporarily unavailable (server error). Auto-retrying.",
+  deg_network:"The server can't reach Gemini (network/internet).",
+  deg_nokey:"No Gemini key configured — translation disabled.",
+  deg_generic:"Translation unavailable (degraded mode) — Arabic is relayed without translation." });
+Object.assign(I18N.nl,{
+  deg_quota:"Gemini-quotum overschreden — de gratis sleutel is op. Wacht op de dagelijkse reset (~middernacht US Pacific), gebruik een andere sleutel of schakel facturering in. Arabisch wordt nog doorgegeven.",
+  deg_auth:"Gemini-sleutel ongeldig of geweigerd. Controleer GEMINI_API_KEY in backend/.env.",
+  deg_server:"Gemini is tijdelijk niet beschikbaar (serverfout). Automatisch opnieuw proberen.",
+  deg_network:"De server kan Gemini niet bereiken (netwerk/internet).",
+  deg_nokey:"Geen Gemini-sleutel ingesteld — vertaling uitgeschakeld.",
+  deg_generic:"Vertaling niet beschikbaar (beperkte modus) — Arabisch wordt zonder vertaling doorgegeven." });
+Object.assign(I18N.ar,{
+  deg_quota:"تجاوزت حصّة Gemini — المفتاح المجاني نفد. انتظر إعادة الضبط اليومية (~منتصف الليل بتوقيت المحيط الهادئ الأمريكي)، أو استخدم مفتاحًا آخر، أو فعّل الفوترة. لا يزال يُبثّ النصّ العربي.",
+  deg_auth:"مفتاح Gemini غير صالح أو مرفوض. تحقّق من GEMINI_API_KEY في backend/.env.",
+  deg_server:"Gemini غير متاح مؤقتًا (خطأ خادم). إعادة المحاولة تلقائيًا.",
+  deg_network:"يتعذّر على الخادم الوصول إلى Gemini (شبكة/إنترنت).",
+  deg_nokey:"لا يوجد مفتاح Gemini — الترجمة معطّلة.",
+  deg_generic:"الترجمة غير متاحة (وضع محدود) — يُبثّ النصّ العربي بدون ترجمة." });
+
+/* --- Référence coranique retrouvée par recherche locale (approx.) --- */
+Object.assign(I18N.fr,{ qref_guessed:"Référence retrouvée automatiquement (à vérifier)" });
+Object.assign(I18N.en,{ qref_guessed:"Reference auto-detected (please verify)" });
+Object.assign(I18N.nl,{ qref_guessed:"Referentie automatisch gevonden (controleer)" });
+Object.assign(I18N.ar,{ qref_guessed:"مرجع مُكتشَف تلقائيًا (يُرجى التحقّق)" });
 
 Object.assign(I18N.en,{bc_mosque:"Mosque name (shown to attendees)",bc_langs:"Default translated languages",
   bc_glossary:"Mosque glossary (optional)",bc_glossary_hint:"Proper nouns, local terms, required transliterations. Injected into every translation.",
@@ -1578,6 +1676,10 @@ const HAS_SR = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const HAS_MR = typeof window.MediaRecorder !== "undefined";
+/* Le micro (getUserMedia) et la reconnaissance vocale exigent un contexte sécurisé :
+   HTTPS, ou http://localhost. Sur http://192.168.x.x, tout capteur micro est bloqué. */
+const MIC_OK = (window.isSecureContext !== false)
+  && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
 /* ==========================================================================
    WebSocket avec reconnexion automatique + heartbeat
@@ -1699,11 +1801,23 @@ const BC = {
   lastSeq:0,
 };
 
-/* iOS / navigateur sans reconnaissance vocale : on retire le mode "speech". */
+/* Détecte ce qui n'est pas possible ici et adapte les modes de captation. */
 function bcSetupCaps(){
+  const seg = id => $('#bc-modeSeg button[data-mode="'+id+'"]');
+  const disable = (id)=>{ const b=seg(id); if(b){ b.disabled=true; b.classList.remove("on"); b.style.opacity=.45; } };
+
+  if(!MIC_OK){
+    // Page non sécurisée (http://192.168.x.x…) → aucun accès micro : seul le mode Manuel marche.
+    disable("speech"); disable("audio");
+    bcMode = "manual";
+    $$('#bc-modeSeg button').forEach(x=>x.classList.toggle("on", x.dataset.mode==="manual"));
+    $("#bc-manualBox").classList.toggle("hidden", false);
+    const w=$("#bc-insecure"); if(w) w.classList.remove("hidden");
+    const note=$("#bc-modeHint"); if(note) note.textContent = t("bc_insecure");
+    return;
+  }
   if(!HAS_SR){
-    const sp=$('#bc-modeSeg button[data-mode="speech"]');
-    if(sp){ sp.disabled=true; sp.classList.remove("on"); sp.style.opacity=.45; }
+    disable("speech");
     bcMode = HAS_MR ? "audio" : "manual";
     $$('#bc-modeSeg button').forEach(x=>x.classList.toggle("on", x.dataset.mode===bcMode));
     $("#bc-manualBox").classList.toggle("hidden", bcMode!=="manual");
@@ -1727,16 +1841,20 @@ $("#btnCreateSession").addEventListener("click", async ()=>{
     const d = await r.json();
     BC.code=d.code; BC.token=d.broadcaster_token; BC.geminiOn=!!d.gemini;
     BC.mosque=d.mosque_name||""; BC.langs=d.target_langs||langs;
+    BC.joinUrl = d.join_url || (location.origin + "/?s=" + d.code);
+    BC.shareable = (d.shareable !== false) && !/(^|\/\/)(localhost|127\.0\.0\.1)/i.test(BC.joinUrl);
     $("#bc-code").textContent=d.code;
     $("#bc-mosqueName").textContent=BC.mosque;
     $("#bc-qr").src=API+"/api/session/"+d.code+"/qr.png";
+    $("#bc-joinUrl").textContent = BC.joinUrl;
+    $("#bc-shareWarn").classList.toggle("hidden", BC.shareable);
     $("#bc-nokey").classList.toggle("hidden", BC.geminiOn);
     $("#bc-setup").classList.add("hidden"); $("#bc-live").classList.remove("hidden");
     bcConnect();
   }catch(e){ toast("Erreur: "+(e.message||e)); $("#btnCreateSession").disabled=false; }
 });
 
-function joinLink(){ return `${location.origin}/?s=${BC.code}`; }
+function joinLink(){ return BC.joinUrl || (`${location.origin}/?s=${BC.code}`); }
 $("#btnCopyLink").addEventListener("click", async ()=>{
   try{ await navigator.clipboard.writeText(joinLink()); toast(t("copied")); }catch(e){ prompt("Lien:", joinLink()); }
 });
@@ -1776,14 +1894,29 @@ function bcOnMsg(m){
     const bits=[];
     if(typeof m.seq==="number") bits.push("#"+m.seq);
     if(m.is_quran) bits.push("Coran"+(m.quran_ref?(" — "+m.quran_ref):""));
-    if(m.degraded) bits.push("⚠ traduction indisponible (dégradé)");
     if(m.corrected) bits.push("✏️ corrigé");
     if(m.manual) bits.push("manuel");
+    if(m.degraded){
+      const rk = {quota:"deg_quota", auth:"deg_auth", server:"deg_server",
+                  network:"deg_network", no_key:"deg_nokey"}[m.degraded_reason] || "deg_generic";
+      const shortLbl = {deg_quota:"quota Gemini dépassé", deg_auth:"clé Gemini refusée",
+        deg_server:"Gemini indisponible", deg_network:"Gemini injoignable",
+        deg_nokey:"pas de clé Gemini", deg_generic:"traduction indisponible"}[rk];
+      bits.push("⚠ "+shortLbl);
+      bcSpeechStatus("err", t(rk));
+      if(m.degraded_reason && m.degraded_reason !== BC._lastDegReason){
+        BC._lastDegReason = m.degraded_reason; toast(t(rk));
+      }
+    } else {
+      BC._lastDegReason = "";
+      if(BC.status==="live" && bcMode!=="manual" && typeof bcSpeechStatus==="function") bcSpeechStatus("ok");
+    }
     $("#bc-monMeta").textContent = bits.join("  ·  ");
     $("#bc-correctBox").classList.add("hidden");
   }
   else if(m.type==="stt"){
     $("#bc-monAr").textContent = m.text||"";
+    if(BC.status==="live" && typeof bcSpeechStatus==="function") bcSpeechStatus("ok");
   }
   else if(m.type==="config_ok"){ toast("Glossaire mis à jour"); }
   else if(m.type==="error"){ toast(m.message||"erreur"); }
@@ -1814,16 +1947,19 @@ $$("#bc-modeSeg button").forEach(b=>b.addEventListener("click",()=>{
 
 /* --- démarrer / pause / stop --- */
 $("#btnStart").addEventListener("click", async ()=>{
-  await bcStartMeter();               // micro + VU-mètre (tous modes sauf manuel pur)
-  if(bcMode==="speech")      startSpeechRecognition();
-  else if(bcMode==="audio")  startAudioStreaming();
-  BC.status="live"; BC.ws.send({type:"control",action:"resume"});
+  // Le VU-mètre est cosmétique : son échec (micro absent, etc.) ne doit PAS bloquer la diffusion.
+  try{ await bcStartMeter(); }catch(e){ console.warn("VU-mètre indisponible:", e && e.message); }
+  BC.status="live";
+  BC.ws && BC.ws.send({type:"control",action:"resume"});
   $("#btnStart").classList.add("hidden");
   $("#btnPause").classList.remove("hidden"); $("#btnStop").classList.remove("hidden");
+  if(bcMode==="speech")      startSpeechRecognition();
+  else if(bcMode==="audio")  startAudioStreaming();
+  else bcSpeechStatus("manual");
 });
 $("#btnPause").addEventListener("click", ()=>{
   if(BC.status==="live"){ BC.status="paused"; BC.ws.send({type:"control",action:"pause"});
-    stopSpeechRecognition(); stopAudioStreaming(); $("#btnPause").textContent=t("bc_resume"); }
+    stopSpeechRecognition(); stopAudioStreaming(); bcSpeechStatus("paused"); $("#btnPause").textContent=t("bc_resume"); }
   else { BC.status="live"; BC.ws.send({type:"control",action:"resume"});
     if(bcMode==="speech") startSpeechRecognition(); else if(bcMode==="audio") startAudioStreaming();
     $("#btnPause").textContent=t("bc_pause"); }
@@ -1831,9 +1967,25 @@ $("#btnPause").addEventListener("click", ()=>{
 $("#btnStop").addEventListener("click", ()=>{
   BC.status="stopped"; BC.ws.send({type:"control",action:"stop"});
   stopSpeechRecognition(); stopAudioStreaming(); bcStopMeter();
+  clearTimeout(BC._srWatch); $("#bc-srStatus").classList.add("hidden");
   $("#btnStart").classList.remove("hidden"); $("#btnPause").classList.add("hidden"); $("#btnStop").classList.add("hidden");
   $("#btnPause").textContent=t("bc_pause");
 });
+
+/* Ligne d'état de la captation (visible côté diffuseur) */
+function bcSpeechStatus(state, extra){
+  const el=$("#bc-srStatus"); if(!el) return;
+  const map={
+    wait:  ["⏳ "+t("sr_st_wait"),  "var(--muted)"],
+    ok:    ["🎙️ "+t("sr_st_ok"),    "var(--ok)"],
+    manual:["✍️ "+t("sr_st_manual"),"var(--muted)"],
+    paused:["⏸️ "+t("sr_st_paused"),"var(--muted)"],
+    warn:  ["⚠️ "+(extra||t("sr_st_nospeech")), "var(--warn)"],
+    err:   ["⛔ "+(extra||t("sr_unavailable")), "var(--danger)"],
+  };
+  const v=map[state]; if(!v){ el.classList.add("hidden"); return; }
+  el.textContent=v[0]; el.style.color=v[1]; el.classList.remove("hidden");
+}
 
 /* --- mode manuel --- */
 $("#btnManualSend").addEventListener("click", ()=>{
@@ -1929,29 +2081,72 @@ function bcStopMeter(){
 /* --- Reconnaissance vocale navigateur (Web Speech API) --- */
 function startSpeechRecognition(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR){ toast(t("sr_unavailable")); return; }
+  if(!SR){
+    bcSpeechStatus("err", t("sr_unavailable"));
+    toast(t("sr_unavailable"));
+    return;
+  }
   stopSpeechRecognition();
-  const r = new SR();
+  let r;
+  try{ r = new SR(); }
+  catch(e){ bcSpeechStatus("err", t("sr_startfail")); toast(t("sr_startfail")); return; }
   r.lang = $("#bc-srlang").value || "ar-SA";
   r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
-  let finalBuf = "";
+
+  BC._srGotAny = false; BC._srRetries = 0;
+  bcSpeechStatus("wait");
+
+  r.onstart = ()=>{ if(BC.status==="live" && bcMode==="speech") bcSpeechStatus("wait"); };
+  r.onaudiostart = ()=>{ /* micro capté */ };
   r.onresult = (ev)=>{
     let interim="";
     for(let i=ev.resultIndex; i<ev.results.length; i++){
       const res=ev.results[i];
       if(res.isFinal){
-        const txt=res[0].transcript.trim();
-        if(txt){ BC.ws.send({type:"transcript", text:txt, is_final:true}); }
+        const txt=(res[0].transcript||"").trim();
+        if(txt){ BC._srGotAny=true; bcSpeechStatus("ok"); BC.ws && BC.ws.send({type:"transcript", text:txt, is_final:true}); }
       } else { interim += res[0].transcript; }
     }
-    if(interim.trim()) BC.ws.send({type:"transcript", text:interim.trim(), is_final:false});
+    if(interim.trim()){ BC._srGotAny=true; bcSpeechStatus("ok"); BC.ws && BC.ws.send({type:"transcript", text:interim.trim(), is_final:false}); }
   };
-  r.onerror = (e)=>{ if(e.error==="not-allowed"||e.error==="service-not-allowed") toast(t("mic_denied")); };
-  r.onend = ()=>{ if(BC.status==="live" && bcMode==="speech"){ try{ r.start(); }catch(e){ setTimeout(()=>{try{r.start()}catch(_){}} ,400); } } };
-  try{ r.start(); }catch(e){}
+  r.onerror = (e)=>{
+    const err = e && e.error;
+    if(err==="no-speech" || err==="aborted") return;            // bénin, onend relancera
+    if(err==="not-allowed" || err==="service-not-allowed"){
+      bcSpeechStatus("err", t("mic_denied")); toast(t("mic_denied")); BC.status="paused";
+    } else if(err==="network"){
+      bcSpeechStatus("err", t("sr_network")); toast(t("sr_network"));
+    } else if(err==="language-not-supported"){
+      bcSpeechStatus("err", t("sr_lang")); toast(t("sr_lang"));
+    } else {
+      bcSpeechStatus("err", (t("sr_error")+" ("+(err||"?")+")"));
+    }
+  };
+  r.onend = ()=>{
+    if(BC.status!=="live" || bcMode!=="speech") return;
+    BC._srRetries++;
+    if(BC._srRetries>=8 && !BC._srGotAny){
+      bcSpeechStatus("err", t("sr_failing"));   // 8 relances sans un mot : on prévient clairement
+    }
+    try{ r.start(); }
+    catch(e){ setTimeout(()=>{ if(BC.status==="live"&&bcMode==="speech"){ try{ r.start(); }catch(_){}} }, 700); }
+  };
+  try{ r.start(); }
+  catch(e){ bcSpeechStatus("err", t("sr_startfail")); toast(t("sr_startfail")); }
   BC.recog=r;
+
+  // Chien de garde : aucun mot capté au bout de 9 s -> conseille un autre mode
+  clearTimeout(BC._srWatch);
+  BC._srWatch = setTimeout(()=>{
+    if(BC.status==="live" && bcMode==="speech" && !BC._srGotAny){
+      bcSpeechStatus("warn", t("sr_nospeech"));
+    }
+  }, 9000);
 }
-function stopSpeechRecognition(){ if(BC.recog){ try{ BC.recog.onend=null; BC.recog.stop(); }catch(e){} BC.recog=null; } }
+function stopSpeechRecognition(){
+  clearTimeout(BC._srWatch);
+  if(BC.recog){ try{ BC.recog.onend=null; BC.recog.abort ? BC.recog.abort() : BC.recog.stop(); }catch(e){} BC.recog=null; }
+}
 
 /* --- Streaming audio -> serveur (repli) --- */
 function pickMime(){
@@ -1959,9 +2154,14 @@ function pickMime(){
   for(const c of cands){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c; }
   return "";
 }
-function startAudioStreaming(){
-  if(!BC.audioStream || !window.MediaRecorder){ toast("MediaRecorder indisponible"); return; }
+async function startAudioStreaming(){
+  if(!window.MediaRecorder){ bcSpeechStatus("err", t("sr_startfail")); toast(t("sr_startfail")); return; }
+  if(!BC.audioStream){
+    try{ BC.audioStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}); }
+    catch(e){ bcSpeechStatus("err", t("mic_denied")); toast(t("mic_denied")); return; }
+  }
   stopAudioStreaming();
+  bcSpeechStatus("wait");
   const mime=pickMime();
   try{ BC.mediaRec = mime ? new MediaRecorder(BC.audioStream,{mimeType:mime}) : new MediaRecorder(BC.audioStream); }
   catch(e){ toast("MediaRecorder: "+e.message); return; }
@@ -2112,7 +2312,7 @@ function renderPhrase(p, opt){
   html += `<div class="tx" dir="${rtlOut?"rtl":"ltr"}">${escapeHtml(mainText || (p.arabic&&LS.lang==="ar"?p.arabic:"…"))}</div>`;
   const meta=[];
   meta.push(`<span>${fmtTime(p.ts||Date.now())}</span>`);
-  if(p.is_quran) meta.push(`<span class="badge q">${p.quran_ref?escapeHtml(p.quran_ref):"Qur'ān"}</span>`);
+  if(p.is_quran) meta.push(`<span class="badge q" title="${p.quran_ref_guessed?escapeHtml(t('qref_guessed')):''}">${p.quran_ref?(escapeHtml(p.quran_ref)+(p.quran_ref_guessed?" ≈":"")):"Qur'ān"}</span>`);
   if(p.is_hadith) meta.push(`<span class="badge">Hadith</span>`);
   if(p.degraded) meta.push(`<span class="badge deg">⚠</span>`);
   if(p.corrected) meta.push(`<span class="badge cor">✏️</span>`);
