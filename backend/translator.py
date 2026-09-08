@@ -59,15 +59,28 @@ MODEL = GEMINI_MODEL  # rétro-compat (affiché dans /healthz)
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 GROQ_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+# Groq retire/renomme ses modèles souvent et certains passent en payant.
+# On essaie une liste jusqu'à ce qu'un réponde (le 1er qui marche est mémorisé).
+GROQ_MODELS = _keys("GROQ_MODELS", "GROQ_MODEL") or [
+    "openai/gpt-oss-120b",       # fort, généralement gratuit
+    "openai/gpt-oss-20b",        # gratuit, rapide
+    "llama-3.3-70b-versatile",   # peut nécessiter un compte payant
+    "llama-3.1-8b-instant",      # toujours dispo, plus faible
+]
+GROQ_MODEL = GROQ_MODELS[0]  # rétro-compat
 GROQ_STT_MODEL = os.getenv("GROQ_STT_MODEL", "whisper-large-v3").strip()
 _GROQ_BASE = "https://api.groq.com/openai/v1"
+_groq_good_model: str | None = None   # modèle Groq confirmé fonctionnel
 
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-OPENROUTER_MODEL = os.getenv(
-    "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
-).strip()
+OPENROUTER_MODELS = _keys("OPENROUTER_MODELS", "OPENROUTER_MODEL") or [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "deepseek/deepseek-chat:free",
+]
+OPENROUTER_MODEL = OPENROUTER_MODELS[0]  # rétro-compat
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+_openrouter_good_model: str | None = None
 
 AZURE_KEY = os.getenv("AZURE_TRANSLATOR_KEY", "").strip()
 AZURE_REGION = os.getenv("AZURE_TRANSLATOR_REGION", "").strip()
@@ -344,47 +357,82 @@ async def _prov_gemini(arabic_text, langs, glossary) -> tuple[dict | None, str]:
 # Fournisseurs OpenAI-compatibles : Groq, OpenRouter
 # --------------------------------------------------------------------------- #
 
-async def _prov_openai_compat(base, key, model, arabic_text, langs, glossary,
-                              extra_headers=None) -> tuple[dict | None, str]:
+def _is_model_missing(status: int, text: str) -> bool:
+    t = (text or "").lower()
+    return status in (404,) or "model_not_found" in t or "does not exist" in t \
+        or "not a valid model" in t or "no allowed providers" in t
+
+
+async def _prov_openai_compat(base, key, models, arabic_text, langs, glossary,
+                              extra_headers=None, on_model_ok=None
+                              ) -> tuple[dict | None, str]:
+    """Essaie chaque modèle de `models` jusqu'à ce qu'un réponde. Un modèle
+    absent (404 / model_not_found) est ignoré ; sur quota/auth on s'arrête."""
     if not key:
         return None, "no_provider"
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     if extra_headers:
         headers.update(extra_headers)
-    body = {
-        "model": model,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": _user_msg(arabic_text, langs, glossary)},
-        ],
-    }
-    try:
-        r = await _http().post(f"{base}/chat/completions", headers=headers, json=body)
-    except (httpx.HTTPError, asyncio.TimeoutError) as exc:
-        print(f"[{base}] réseau: {exc!r}")
-        return None, "network"
-    if r.status_code != 200:
-        err = _status_to_error(r.status_code)
-        print(f"[{base}] HTTP {r.status_code} ({err}): {r.text[:200]}")
-        return None, err
-    try:
-        raw = r.json()["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError, ValueError):
-        return None, "bad_response"
-    return _parse_llm_json(raw, langs, arabic_text), ""
+    last_err = "bad_response"
+    for model in [m for m in models if m]:
+        body = {
+            "model": model,
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": _user_msg(arabic_text, langs, glossary)},
+            ],
+        }
+        try:
+            r = await _http().post(f"{base}/chat/completions", headers=headers, json=body)
+        except (httpx.HTTPError, asyncio.TimeoutError) as exc:
+            print(f"[{base}] réseau: {exc!r}")
+            return None, "network"
+        if r.status_code == 200:
+            try:
+                raw = r.json()["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError, ValueError):
+                return None, "bad_response"
+            parsed = _parse_llm_json(raw, langs, arabic_text)
+            if parsed is not None and on_model_ok:
+                on_model_ok(model)
+            return parsed, ("" if parsed is not None else "bad_response")
+        txt = r.text[:300]
+        if _is_model_missing(r.status_code, txt):
+            print(f"[{base}] modèle indisponible: {model} -> essai suivant")
+            last_err = "bad_response"
+            continue
+        last_err = _status_to_error(r.status_code)
+        print(f"[{base}] HTTP {r.status_code} ({last_err}): {txt}")
+        if last_err in ("quota", "auth"):
+            return None, last_err
+    return None, last_err
+
+
+def _set_groq_model(m):
+    global _groq_good_model
+    _groq_good_model = m
+
+
+def _set_openrouter_model(m):
+    global _openrouter_good_model
+    _openrouter_good_model = m
 
 
 async def _prov_groq(arabic_text, langs, glossary):
-    return await _prov_openai_compat(_GROQ_BASE, GROQ_KEY, GROQ_MODEL,
-                                    arabic_text, langs, glossary)
+    models = ([_groq_good_model] if _groq_good_model else []) + GROQ_MODELS
+    return await _prov_openai_compat(_GROQ_BASE, GROQ_KEY, models,
+                                    arabic_text, langs, glossary,
+                                    on_model_ok=_set_groq_model)
 
 
 async def _prov_openrouter(arabic_text, langs, glossary):
+    models = ([_openrouter_good_model] if _openrouter_good_model else []) + OPENROUTER_MODELS
     return await _prov_openai_compat(
-        _OPENROUTER_BASE, OPENROUTER_KEY, OPENROUTER_MODEL, arabic_text, langs, glossary,
+        _OPENROUTER_BASE, OPENROUTER_KEY, models, arabic_text, langs, glossary,
         extra_headers={"HTTP-Referer": "https://github.com/", "X-Title": "khutbah-live"},
+        on_model_ok=_set_openrouter_model,
     )
 
 

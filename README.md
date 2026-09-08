@@ -81,8 +81,8 @@ Pour ne plus jamais tomber en mode dégradé sur un simple quota gratuit épuis�
 
 - **Traduction** (`TRANSLATE_PROVIDERS`, défaut `gemini,groq,openrouter,azure`) :
   - **`gemini`** — meilleure fidélité religieuse. **Rotation de clés** : `GEMINI_API_KEYS="k1,k2,k3"` (projets Google Cloud distincts → quotas cumulés) ; bascule automatique sur la clé suivante en cas de `429`. Modèle `GEMINI_MODEL` (défaut `gemini-2.5-flash-lite`, quota gratuit plus large que `flash`).
-  - **`groq`** (`GROQ_API_KEY`) — Llama 3.3 70B, gratuit, très rapide, ~14 400 req/j.
-  - **`openrouter`** (`OPENROUTER_API_KEY`) — une clé, plusieurs modèles dont des `:free` (`OPENROUTER_MODEL`).
+  - **`groq`** (`GROQ_API_KEY`) — gratuit, très rapide. **Liste de modèles auto-adaptative** (`GROQ_MODELS`, défaut `openai/gpt-oss-120b, openai/gpt-oss-20b, llama-3.3-70b-versatile, llama-3.1-8b-instant`) : un modèle retiré/payant (404) est ignoré, le 1er qui répond est mémorisé — Groq renomme ses modèles très souvent.
+  - **`openrouter`** (`OPENROUTER_API_KEY`) — une clé, liste `OPENROUTER_MODELS` (défaut : Llama 3.3 70B, Qwen 2.5 72B, DeepSeek — versions `:free`).
   - **`azure`** (`AZURE_TRANSLATOR_KEY` + `AZURE_TRANSLATOR_REGION`) — **2 M caractères/mois gratuits**, ultra-fiable. Traduction pure : pas de détection Coran (mais l'index local ci-dessus prend le relais).
 - **Transcription audio** (`STT_PROVIDERS`, défaut `groq,gemini`) : **Groq Whisper large-v3** (gratuit, excellent en arabe/darija) puis Gemini.
 - Si **tous** échouent → mode dégradé (arabe diffusé), avec la cause réelle affichée (`quota` / `auth` / `no_provider`…). `/healthz` expose `translate_providers`, `translate_last_provider`, `translate_last_error` ; le moniteur diffuseur affiche `↻ groq` quand un repli a servi.

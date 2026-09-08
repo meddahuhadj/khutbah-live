@@ -48,6 +48,9 @@ def _reset(monkeypatch):
     translator._last_error = ""
     translator._last_provider = ""
     translator._gemini_key_idx = 0
+    translator._groq_good_model = None
+    translator._openrouter_good_model = None
+    monkeypatch.setattr(translator, "GROQ_MODELS", ["m-a", "m-b", "m-c"])
     monkeypatch.setattr(translator, "GEMINI_KEYS", ["gk1"])
     monkeypatch.setattr(translator, "GROQ_KEY", "")
     monkeypatch.setattr(translator, "OPENROUTER_KEY", "")
@@ -85,6 +88,31 @@ async def test_falls_back_to_groq_on_gemini_quota(monkeypatch):
     assert r["translations"]["fr"] == "via groq"
     assert translator.last_provider() == "groq"
     assert translator.last_error() == ""
+
+
+async def test_groq_skips_missing_model_and_uses_next(monkeypatch):
+    monkeypatch.setattr(translator, "GROQ_KEY", "grq")
+    monkeypatch.setattr(translator, "TRANSLATE_PROVIDERS", ["groq"])
+    tried = []
+
+    def gh(url, kw):
+        model = kw["json"]["model"]
+        tried.append(model)
+        if model in ("m-a", "m-b"):
+            return _Resp(404, {"error": {"code": "model_not_found"}},
+                         '{"error":{"message":"The model does not exist"}}')
+        return _openai_ok({"arabic": "x", "is_quran": False,
+                           "translations": [{"lang": "fr", "text": "via m-c"}]})
+
+    _use(monkeypatch, ("groq.com", gh))
+    r = await translator.translate_segment("x", ["fr"])
+    assert r["translations"]["fr"] == "via m-c"
+    assert tried == ["m-a", "m-b", "m-c"]
+    assert translator._groq_good_model == "m-c"
+    # 2e appel : le bon modèle est essayé en premier
+    tried.clear()
+    await translator.translate_segment("y", ["fr"])
+    assert tried[0] == "m-c"
 
 
 async def test_gemini_key_rotation_on_quota(monkeypatch):
