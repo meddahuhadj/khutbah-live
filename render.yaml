@@ -13,6 +13,11 @@ services:
       # Secret réglé dans le dashboard Render (jamais commité) :
       - key: GEMINI_API_KEY
         sync: false
+      # Modèle Gemini. Le quota gratuit de gemini-2.5-flash est vite atteint ;
+      # gemini-2.5-flash-lite a un quota gratuit plus large. Surchargeable dans
+      # le dashboard Render (Environment).
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
       # Facultatif : langues traduites par défaut (ex: "fr,en,nl")
       - key: DEFAULT_TARGET_LANGS
         sync: false
