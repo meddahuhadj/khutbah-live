@@ -1896,12 +1896,13 @@ function bcOnMsg(m){
     if(m.is_quran) bits.push("Coran"+(m.quran_ref?(" — "+m.quran_ref):""));
     if(m.corrected) bits.push("✏️ corrigé");
     if(m.manual) bits.push("manuel");
+    if(m.provider && m.provider!=="gemini") bits.push("↻ "+m.provider);
     if(m.degraded){
       const rk = {quota:"deg_quota", auth:"deg_auth", server:"deg_server",
-                  network:"deg_network", no_key:"deg_nokey"}[m.degraded_reason] || "deg_generic";
-      const shortLbl = {deg_quota:"quota Gemini dépassé", deg_auth:"clé Gemini refusée",
-        deg_server:"Gemini indisponible", deg_network:"Gemini injoignable",
-        deg_nokey:"pas de clé Gemini", deg_generic:"traduction indisponible"}[rk];
+                  network:"deg_network", no_provider:"deg_nokey", no_key:"deg_nokey"}[m.degraded_reason] || "deg_generic";
+      const shortLbl = {deg_quota:"quota dépassé (tous fournisseurs)", deg_auth:"clé refusée",
+        deg_server:"fournisseur indisponible", deg_network:"fournisseur injoignable",
+        deg_nokey:"aucun fournisseur configuré", deg_generic:"traduction indisponible"}[rk];
       bits.push("⚠ "+shortLbl);
       bcSpeechStatus("err", t(rk));
       if(m.degraded_reason && m.degraded_reason !== BC._lastDegReason){

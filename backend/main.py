@@ -453,6 +453,7 @@ async def _broadcast_record(room: Room, rec: dict, *, manual: bool = False,
         "quran_ref": rec["quran_ref"],
         "degraded": rec.get("degraded", False),
         "degraded_reason": (translator.last_error() if rec.get("degraded") else ""),
+        "provider": ("" if rec.get("degraded") else translator.last_provider()),
         "corrected": corrected,
         "manual": manual,
     })
@@ -548,7 +549,9 @@ async def healthz():
         "segments_total": sum(r.seq for r in ROOMS.values()),
         "segments_dropped": sum(r.dropped_segments for r in ROOMS.values()),
         "gemini": translator.has_api_key(),
-        "gemini_last_error": translator.last_error() or None,
+        "translate_providers": translator.TRANSLATE_PROVIDERS,
+        "translate_last_error": translator.last_error() or None,
+        "translate_last_provider": translator.last_provider() or None,
         "model": translator.MODEL,
     }
 

@@ -73,7 +73,22 @@ en synthèse vocale dans ses écouteurs. **Rien n'est diffusé en audio dans la 
 - **`/healthz` enrichi** : `rooms`, `rooms_live`, `listeners`, `segments_total`, `segments_dropped`, `gemini_last_error`.
 - **Garde-fou prompt** : un test vérifie que `SYSTEM_PROMPT.md` est bien chargé (≠ prompt court de secours).
 
-> ⚠️ **Sécurité** : ne jamais mettre `backend/.env` (clé Gemini) dans une archive ou un commit — il est déjà dans `.gitignore`. Pour partager le projet : `zip -r projet.zip . -x '*/.venv/*' '*/.git/*' '*.env' 'backend/data/quran_raw.json'`.
+> ⚠️ **Sécurité** : ne jamais mettre `backend/.env` (clés API) dans une archive ou un commit — il est déjà dans `.gitignore`. Pour partager le projet : `zip -r projet.zip . -x '*/.venv/*' '*/.git/*' '*.env' 'backend/data/quran_raw.json'`.
+
+### Chaîne de repli multi-fournisseurs (v2.0)
+
+Pour ne plus jamais tomber en mode dégradé sur un simple quota gratuit épuisé, la traduction et la transcription essaient **plusieurs fournisseurs dans l'ordre** — seuls ceux dont la clé est présente sont tentés, le premier qui répond gagne.
+
+- **Traduction** (`TRANSLATE_PROVIDERS`, défaut `gemini,groq,openrouter,azure`) :
+  - **`gemini`** — meilleure fidélité religieuse. **Rotation de clés** : `GEMINI_API_KEYS="k1,k2,k3"` (projets Google Cloud distincts → quotas cumulés) ; bascule automatique sur la clé suivante en cas de `429`. Modèle `GEMINI_MODEL` (défaut `gemini-2.5-flash-lite`, quota gratuit plus large que `flash`).
+  - **`groq`** (`GROQ_API_KEY`) — Llama 3.3 70B, gratuit, très rapide, ~14 400 req/j.
+  - **`openrouter`** (`OPENROUTER_API_KEY`) — une clé, plusieurs modèles dont des `:free` (`OPENROUTER_MODEL`).
+  - **`azure`** (`AZURE_TRANSLATOR_KEY` + `AZURE_TRANSLATOR_REGION`) — **2 M caractères/mois gratuits**, ultra-fiable. Traduction pure : pas de détection Coran (mais l'index local ci-dessus prend le relais).
+- **Transcription audio** (`STT_PROVIDERS`, défaut `groq,gemini`) : **Groq Whisper large-v3** (gratuit, excellent en arabe/darija) puis Gemini.
+- Si **tous** échouent → mode dégradé (arabe diffusé), avec la cause réelle affichée (`quota` / `auth` / `no_provider`…). `/healthz` expose `translate_providers`, `translate_last_provider`, `translate_last_error` ; le moniteur diffuseur affiche `↻ groq` quand un repli a servi.
+- Voir `backend/.env.example` pour toutes les variables. **48 tests** (`backend/tests/`).
+
+**Hébergement gratuit sans mise en veille** (vs Render Free qui s'endort après 15 min) : Fly.io, Koyeb, Oracle Cloud Always Free (VM permanente + Caddy), ou PC de la mosquée + Cloudflare Tunnel.
 
 ---
 

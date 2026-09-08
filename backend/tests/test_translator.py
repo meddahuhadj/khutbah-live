@@ -1,4 +1,4 @@
-"""Tests unitaires de translator.py : parsing, cache, dernière erreur — httpx mocké."""
+"""translator.py — chaîne de repli multi-fournisseurs (HTTP entièrement mocké)."""
 import json
 
 import pytest
@@ -9,8 +9,8 @@ import translator
 class _Resp:
     def __init__(self, status, payload=None, text=""):
         self.status_code = status
-        self._payload = payload
-        self.text = text or json.dumps(payload or {})
+        self._payload = payload if payload is not None else {}
+        self.text = text or json.dumps(self._payload)
 
     def json(self):
         return self._payload
@@ -20,93 +20,159 @@ def _gemini_ok(obj):
     return _Resp(200, {"candidates": [{"content": {"parts": [{"text": json.dumps(obj)}]}}]})
 
 
-def _client_returning(resp):
-    """AsyncClient factice dont .post() renvoie toujours `resp`."""
-    class _C:
-        async def post(self, *a, **k):
-            return resp
-    return _C()
+def _openai_ok(obj):
+    return _Resp(200, {"choices": [{"message": {"content": json.dumps(obj)}}]})
+
+
+def _azure_ok(pairs):
+    return _Resp(200, [{"translations": [{"to": k, "text": v} for k, v in pairs.items()]}])
+
+
+class FakeHttp:
+    """Client factice : route .post() selon l'URL, via des handlers fournis par le test."""
+    def __init__(self, handlers):
+        self.handlers = handlers          # liste de (motif_url, fonction(url,kw)->_Resp)
+        self.calls = []
+
+    async def post(self, url, **kw):
+        self.calls.append(url)
+        for needle, fn in self.handlers:
+            if needle in url:
+                return fn(url, kw)
+        raise AssertionError(f"URL non gérée par le test : {url}")
 
 
 @pytest.fixture(autouse=True)
-def _key(monkeypatch):
-    monkeypatch.setattr(translator, "API_KEY", "test-key")
+def _reset(monkeypatch):
     translator._cache.clear()
     translator._last_error = ""
+    translator._last_provider = ""
+    translator._gemini_key_idx = 0
+    monkeypatch.setattr(translator, "GEMINI_KEYS", ["gk1"])
+    monkeypatch.setattr(translator, "GROQ_KEY", "")
+    monkeypatch.setattr(translator, "OPENROUTER_KEY", "")
+    monkeypatch.setattr(translator, "AZURE_KEY", "")
+    monkeypatch.setattr(translator, "AZURE_REGION", "")
+    monkeypatch.setattr(translator, "TRANSLATE_PROVIDERS",
+                        ["gemini", "groq", "openrouter", "azure"])
 
 
-async def test_translate_parses_and_maps_languages(monkeypatch):
-    payload = {"arabic": "نص", "is_quran": True, "quran_ref": "2:255",
-               "translations": [{"lang": "fr", "text": "texte"},
-                                {"lang": "en", "text": "text"}]}
+def _use(monkeypatch, *handlers):
+    fake = FakeHttp(list(handlers))
+    monkeypatch.setattr(translator, "_http", lambda: fake)
+    return fake
 
-    class C:
-        async def post(self, *a, **k):
-            return _gemini_ok(payload)
 
-    monkeypatch.setattr(translator, "_http", lambda: C())
+async def test_gemini_success(monkeypatch):
+    obj = {"arabic": "نص", "is_quran": True, "quran_ref": "2:255",
+           "translations": [{"lang": "fr", "text": "texte"}, {"lang": "en", "text": "text"}]}
+    _use(monkeypatch, ("generativelanguage", lambda u, k: _gemini_ok(obj)))
     r = await translator.translate_segment("نص عربي", ["fr", "en"])
     assert r["translations"] == {"fr": "texte", "en": "text"}
-    assert r["is_quran"] is True and r["quran_ref"] == "2:255"
+    assert r["is_quran"] and r["quran_ref"] == "2:255"
+    assert translator.last_provider() == "gemini"
     assert translator.last_error() == ""
 
 
-async def test_missing_language_filled_empty(monkeypatch):
-    payload = {"arabic": "x", "is_quran": False,
-               "translations": [{"lang": "fr", "text": "ok"}]}
-    monkeypatch.setattr(translator, "_http", lambda: _client_returning(_gemini_ok(payload)))
-    r = await translator.translate_segment("x", ["fr", "de"])
-    assert r["translations"]["fr"] == "ok"
-    assert r["translations"]["de"] == ""
+async def test_falls_back_to_groq_on_gemini_quota(monkeypatch):
+    monkeypatch.setattr(translator, "GROQ_KEY", "grq")
+    obj = {"arabic": "x", "is_quran": False,
+           "translations": [{"lang": "fr", "text": "via groq"}]}
+    _use(monkeypatch,
+         ("generativelanguage", lambda u, k: _Resp(429, {}, "quota")),
+         ("groq.com", lambda u, k: _openai_ok(obj)))
+    r = await translator.translate_segment("x", ["fr"])
+    assert r["translations"]["fr"] == "via groq"
+    assert translator.last_provider() == "groq"
+    assert translator.last_error() == ""
 
 
-async def test_cache_hit_avoids_second_call(monkeypatch):
-    n = {"c": 0}
-    payload = {"arabic": "x", "is_quran": False,
-               "translations": [{"lang": "fr", "text": "ok"}]}
+async def test_gemini_key_rotation_on_quota(monkeypatch):
+    monkeypatch.setattr(translator, "GEMINI_KEYS", ["k1", "k2"])
+    seen = []
 
-    class C:
-        async def post(self, *a, **k):
-            n["c"] += 1
-            return _gemini_ok(payload)
+    def gh(url, kw):
+        seen.append(kw["params"]["key"])
+        if kw["params"]["key"] == "k1":
+            return _Resp(429, {}, "quota")
+        return _gemini_ok({"arabic": "x", "is_quran": False,
+                           "translations": [{"lang": "fr", "text": "ok k2"}]})
 
-    monkeypatch.setattr(translator, "_http", lambda: C())
-    await translator.translate_segment("phrase répétée", ["fr"])
-    await translator.translate_segment("phrase répétée", ["fr"])
-    assert n["c"] == 1
-    # use_cache=False force un nouvel appel
-    await translator.translate_segment("phrase répétée", ["fr"], use_cache=False)
-    assert n["c"] == 2
+    _use(monkeypatch, ("generativelanguage", gh))
+    r = await translator.translate_segment("x", ["fr"])
+    assert r["translations"]["fr"] == "ok k2"
+    assert seen == ["k1", "k2"]
 
 
-async def test_429_sets_quota_error(monkeypatch):
-    class C:
-        async def post(self, *a, **k):
-            return _Resp(429, {}, text="quota exceeded")
+async def test_azure_is_pure_mt(monkeypatch):
+    monkeypatch.setattr(translator, "AZURE_KEY", "ak")
+    monkeypatch.setattr(translator, "AZURE_REGION", "westeurope")
+    monkeypatch.setattr(translator, "TRANSLATE_PROVIDERS", ["azure"])
+    _use(monkeypatch,
+         ("cognitive.microsofttranslator", lambda u, k: _azure_ok({"fr": "paix", "en": "peace"})))
+    r = await translator.translate_segment("سلام", ["fr", "en"])
+    assert r["translations"] == {"fr": "paix", "en": "peace"}
+    assert r["is_quran"] is False and r["quran_ref"] is None
+    assert translator.last_provider() == "azure"
 
-    monkeypatch.setattr(translator, "_http", lambda: C())
-    monkeypatch.setattr(translator, "MAX_RETRIES", 0)
+
+async def test_all_providers_fail_reports_quota(monkeypatch):
+    monkeypatch.setattr(translator, "GROQ_KEY", "grq")
+    _use(monkeypatch,
+         ("generativelanguage", lambda u, k: _Resp(429, {}, "q")),
+         ("groq.com", lambda u, k: _Resp(429, {}, "q")))
     r = await translator.translate_segment("x", ["fr"])
     assert r is None
     assert translator.last_error() == "quota"
 
 
-async def test_403_sets_auth_error(monkeypatch):
-    monkeypatch.setattr(translator, "MAX_RETRIES", 0)
-    monkeypatch.setattr(translator, "_http", lambda: _client_returning(_Resp(403, {}, "denied")))
+async def test_missing_language_filled_empty(monkeypatch):
+    obj = {"arabic": "x", "is_quran": False, "translations": [{"lang": "fr", "text": "ok"}]}
+    _use(monkeypatch, ("generativelanguage", lambda u, k: _gemini_ok(obj)))
+    r = await translator.translate_segment("x", ["fr", "de"])
+    assert r["translations"] == {"fr": "ok", "de": ""}
+
+
+async def test_cache_hit_avoids_second_call(monkeypatch):
+    obj = {"arabic": "x", "is_quran": False, "translations": [{"lang": "fr", "text": "ok"}]}
+    fake = _use(monkeypatch, ("generativelanguage", lambda u, k: _gemini_ok(obj)))
+    await translator.translate_segment("répétée", ["fr"])
+    await translator.translate_segment("répétée", ["fr"])
+    assert len(fake.calls) == 1
+    await translator.translate_segment("répétée", ["fr"], use_cache=False)
+    assert len(fake.calls) == 2
+
+
+async def test_no_provider_configured(monkeypatch):
+    monkeypatch.setattr(translator, "GEMINI_KEYS", [])
+    assert translator.has_api_key() is False
     assert await translator.translate_segment("x", ["fr"]) is None
-    assert translator.last_error() == "auth"
+    assert translator.last_error() == "no_provider"
 
 
-async def test_no_target_langs_returns_none():
+async def test_no_target_langs():
     assert await translator.translate_segment("نص", ["ar"]) is None
     assert await translator.translate_segment("", ["fr"]) is None
 
 
 def test_system_prompt_is_the_real_one_not_the_fallback():
-    """Garde-fou : si SYSTEM_PROMPT.md n'est pas trouvé, on tomberait sur le
-    prompt court de secours — ce qui dégraderait silencieusement la qualité."""
     assert translator.SYSTEM_PROMPT != translator._FALLBACK_PROMPT
     assert len(translator.SYSTEM_PROMPT) > 800
     low = translator.SYSTEM_PROMPT.lower()
     assert "is_quran" in low and "quran_ref" in low
+
+
+async def test_stt_prefers_groq_then_gemini(monkeypatch):
+    monkeypatch.setattr(translator, "GROQ_KEY", "grq")
+    monkeypatch.setattr(translator, "STT_PROVIDERS", ["groq", "gemini"])
+    _use(monkeypatch, ("groq.com/openai/v1/audio", lambda u, k: _Resp(200, {}, "نص مسموع")))
+    assert await translator.transcribe_audio(b"xxxx", "audio/webm") == "نص مسموع"
+
+    _use(monkeypatch,
+         ("groq.com/openai/v1/audio", lambda u, k: _Resp(500, {}, "err")),
+         ("generativelanguage", lambda u, k: _gemini_ok_text("نص من جيميني")))
+    assert await translator.transcribe_audio(b"xxxx", "audio/webm") == "نص من جيميني"
+
+
+def _gemini_ok_text(t):
+    return _Resp(200, {"candidates": [{"content": {"parts": [{"text": t}]}}]})
