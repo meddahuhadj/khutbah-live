@@ -2,6 +2,8 @@
 import asyncio
 import json
 
+import main
+
 
 def _new_session(client, **body):
     d = client.post("/api/session", json=body or {}).json()
@@ -265,6 +267,7 @@ def test_live_translation_fanned_out_to_listeners(app_client, monkeypatch):
 
     monkeypatch.setattr(live_translate, "_connect", connector)
     monkeypatch.setattr(live_translate, "LIVE_CONNECT_RETRIES", 0)
+    monkeypatch.setattr(main, "LIVE_FLUSH_TMO", 0.05)
     monkeypatch.setattr("translator.GEMINI_KEYS", ["k-live"])
 
     code, tok = _new_session(app_client, target_langs=["fr", "en"])
@@ -286,4 +289,87 @@ def test_live_translation_fanned_out_to_listeners(app_client, monkeypatch):
             assert p.get("live") is True
             assert "Au nom d'Allah" in p["text"]
             assert p.get("arabic") == "بسم الله"
-            emitted_done.set()
+
+
+def test_live_streaming_accumulates_into_full_sentence(app_client, monkeypatch):
+    import asyncio
+    import base64
+    import time
+
+    import live_translate
+
+    fragments = {"fr": "Première partie,", "en": "First part,"}
+
+    class FakeLiveWS:
+        def __init__(self):
+            self.lang = None
+            self._emitted = [{"setupComplete": {}}]
+        async def send(self, raw):
+            msg = json.loads(raw)
+            if self.lang is None and "setup" in msg:
+                self.lang = msg["setup"]["generationConfig"]["translationConfig"]["targetLanguageCode"]
+            if "realtimeInput" in msg and self.lang in fragments:
+                self._emitted.append({
+                    "serverContent": {
+                        "inputTranscription": {"text": "بسم الله"},
+                        "outputTranscription": {"text": fragments[self.lang]},
+                        "modelTurn": {"parts": [{"text": fragments[self.lang]}]},
+                    }
+                })
+        async def close(self):
+            self._emitted.clear()
+        async def __anext__(self):
+            while not self._emitted:
+                await asyncio.sleep(0.02)
+            return json.dumps(self._emitted.pop(0))
+        def __aiter__(self):
+            return self
+
+    async def connector(url, **kw):
+        return FakeLiveWS()
+
+    monkeypatch.setattr(live_translate, "_connect", connector)
+    monkeypatch.setattr(live_translate, "LIVE_CONNECT_RETRIES", 0)
+    # Silence long : la finalisation n'a lieu QUE sur ponctuation finale.
+    monkeypatch.setattr(main, "LIVE_FLUSH_TMO", 30.0)
+    monkeypatch.setattr("translator.GEMINI_KEYS", ["k-live"])
+
+    code, tok = _new_session(app_client, target_langs=["fr", "en"])
+    with app_client.websocket_connect(f"/ws/broadcast/{code}?token={tok}") as b:
+        _drain(b, "hello")
+        b.send_text(json.dumps({"type": "live_start"}))
+        m = _drain(b, "live")
+        assert set(m["started"]) == {"en", "fr"}
+        with app_client.websocket_connect(f"/ws/listen/{code}?lang=fr") as l:
+            _drain(l, "hello")
+            room = main.get_room(code)
+
+            def send_chunk():
+                b.send_text(json.dumps({
+                    "type": "live_audio",
+                    "data": base64.b64encode(b"\x10\x00" * 500).decode("ascii"),
+                }))
+
+            # Fragment 1 (virgule) -> simple aperçu, aucune phrase publiée.
+            send_chunk()
+            p1 = _drain(l, "live_partial")
+            assert p1["text"] == "Première partie,"
+            time.sleep(0.3)
+            assert len(room.history) == 0
+
+            # Fragment 2 -> le tampon est fusionné, toujours rien de final.
+            fragments["fr"] = "c'est la"
+            send_chunk()
+            p2 = _drain(l, "live_partial")
+            assert p2["text"] == "Première partie, c'est la"
+            time.sleep(0.3)
+            assert len(room.history) == 0
+
+            # Fragment 3 fini par « . » -> la phrase complète est publiée.
+            fragments["fr"] = "seconde partie."
+            send_chunk()
+            ph = _drain(l, "phrase")
+            assert ph.get("live") is True
+            assert "Première partie, c'est la seconde partie" in ph["text"]
+            assert ph.get("arabic") == "بسم الله"
+            assert len(room.history) == 1

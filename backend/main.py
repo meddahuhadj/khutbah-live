@@ -123,10 +123,19 @@ class Room:
         self.live: dict[str, live_translate.LiveTranslateSession] = {}
         self.live_started_at: float | None = None
         self.last_live_arabic: str = ""
+        # Tampon des fragments Live par langue : une `phrase` n'est publiée
+        # qu'à la ponctuation finale (ou après silence) -> sous-titres pleins.
+        self.live_buf: dict[str, str] = {}
+        self.last_live_ts: float = 0.0
+        self.live_flusher: asyncio.Task | None = None
 
     # --- Live (flux continu) -------------------------------------------------
     def live_stop(self) -> None:
         """Arrête toutes les sessions de traduction live de la room."""
+        if self.live_flusher is not None and not self.live_flusher.done():
+            self.live_flusher.cancel()
+        self.live_flusher = None
+        self.live_buf.clear()
         for sess in list(self.live.values()):
             asyncio.create_task(sess.stop())
         self.live.clear()
@@ -457,9 +466,24 @@ async def _live_dispatch(room: Room, lang: str, event: dict):
             room.last_live_arabic = event["text"]
             await room.broadcast_all({"type": "interim", "arabic": event["text"]})
     elif etype == "translation":
-        text = (event.get("text") or "").strip()
-        if text:
-            await publish_live_translation(room, lang, text, room.last_live_arabic)
+        frag = (event.get("text") or "").strip()
+        if not frag:
+            return
+        buf = room.live_buf.get(lang, "")
+        buf = (buf + " " + frag).strip() if buf else frag
+        room.live_buf[lang] = buf
+        room.last_live_ts = time.time()
+        _ensure_live_flusher(room)
+        # Aperçu en continu pour les auditeurs de cette langue (sous-titre vivant).
+        await room.broadcast_lang(lang, {
+            "type": "live_partial", "lang": lang,
+            "text": buf,
+            "arabic": room.last_live_arabic,
+        })
+        if _ends_sentence(buf) or len(buf) >= LIVE_FLUSH_MAX:
+            text = room.live_buf.pop(lang, "").strip()
+            if text:
+                await publish_live_translation(room, lang, text, room.last_live_arabic)
     elif etype == "error":
         await room.notify_broadcaster(
             {"type": "live", "action": "error", "lang": lang,
@@ -535,6 +559,41 @@ async def live_stop(room: Room) -> None:
 
 
 _MAX_LIVE_PCM = 1024 * 1024  # 1 Mo max par carte PCM (bien au-delà d'un chunk de 100 ms)
+
+# --- Finalisation des phrases Live ------------------------------------
+# Les fragments renvoyés par Gemini Live sont accumulés par langue ; une phrase
+# n'est publiée qu'à la ponctuation finale (sous-titre complet) ou après silence.
+LIVE_FLUSH_TMO = 1.2     # secondes de silence avant de finaliser le tampon
+LIVE_FLUSH_MAX = 400     # longueur max du tampon avant flush forcé (anti-accumulation)
+
+_SENT_END = (".", "؟", "?", "!", "…", "۔")
+
+
+def _ends_sentence(text: str) -> bool:
+    return text.endswith(_SENT_END)
+
+
+def _ensure_live_flusher(room: Room) -> None:
+    if room.live_flusher is None or room.live_flusher.done():
+        room.live_flusher = asyncio.create_task(_live_flusher(room))
+
+
+async def _live_flusher(room: Room) -> None:
+    """Finalise le tampon d'une langue resté silencieux (pas de ponctuation)."""
+    try:
+        while True:
+            await asyncio.sleep(LIVE_FLUSH_TMO)
+            async with room._lock:
+                stale = [
+                    lang for lang, buf in room.live_buf.items()
+                    if buf.strip() and time.time() - room.last_live_ts >= LIVE_FLUSH_TMO
+                ]
+                texts = {lang: room.live_buf.pop(lang, "").strip() for lang in stale}
+            for lang, text in texts.items():
+                if text:
+                    await publish_live_translation(room, lang, text, room.last_live_arabic)
+    except asyncio.CancelledError:
+        pass
 
 
 async def _relay_live_audio(room: Room, pcm: bytes) -> None:

@@ -102,9 +102,10 @@ Le mode **« Traduction directe (Live) »** du diffuseur branche le micro sur **
 
 - **Un flux audio, plusieurs langues** : le backend ouvre une session par langue active (`LIVE_MAX_LANGS`, défaut 4) et relaie le même PCM à toutes — le coût en bande passante est indépendant du nombre d'auditeurs.
 - **Repli automatique** : si une session Live échoue à l'établissement (`setupComplete` non reçu, quota…) ou se ferme en cours de direct, le serveur prévient le diffuseur (`{type:"live", action:"error"/"closed"}`) qui voit le message ; le mode segmenté existant reste disponible d'un clic. Transcription source (arabe) propagée en `interim` comme en mode classique.
+- **Traduction en continu** : les fragments reçus sont accumulés par langue (`live_partial`, aperçu affiché en sous-titre vivant) et ne sont **publicisés qu'à la ponctuation finale** (ou après `LIVE_FLUSH_TMO` de silence / `LIVE_FLUSH_MAX` caractères) — l'auditeur lit des phrases complètes, pas des morceaux.
 - **Configuration** (`backend/.env`) : `LIVE_ENABLED=1/0`, `LIVE_MODEL`, `LIVE_MAX_LANGS`, `LIVE_SETUP_TMO`, `LIVE_CONNECT_RETRIES`. Nécessite une clé Gemini (`GEMINI_API_KEY`/`GEMINI_API_KEYS`) ; sans clé le bouton « Live » est **grisé** côté navigateur.
 - **Contribution audio** : `frontend` capture le micro via `getUserMedia`, le convertit en **PCM 16 kHz mono 16-bit** (`AudioContext({sampleRate:16000})`), l'envoie par chunks (`live_audio`), démarre (`live_start`) et arrête (`live_stop`, pause/stop/reconnexion gérés).
-- **64 tests** (`backend/tests/`), dont `test_live_translate.py` (session Live mockée, gestion des événements serveur) et des tests bout-en-bout WebSocket (ouverture multi-langues, fan-out `live:true`).
+- **65 tests** (`backend/tests/`), dont `test_live_translate.py` (session Live mockée, gestion des événements serveur) et des tests bout-en-bout WebSocket (ouverture multi-langues, fan-out `live:true`, accumulation des fragments en phrase complète).
 
 ---
 
@@ -351,7 +352,7 @@ doit tourner sur **une seule instance persistante**, pas en serverless.
 **Diffuseur → serveur** : `{type:"transcript", text, is_final, manual?}` · `{type:"audio", mime, data(base64)}` · `{type:"control", action:"pause|resume|stop"}` · `{type:"correct", seq, arabic}` · `{type:"config", glossary?, target_langs?}` · `{type:"level", value}` · `{type:"live_start"}` · `{type:"live_stop"}` · `{type:"live_audio", data(base64: PCM 16 kHz mono)}` · `{type:"ping"}`
 **Serveur → diffuseur** : `{type:"hello", …, mosque_name, glossary, target_langs, live:{enabled, model, max_langs}}` · `{type:"stats", listeners, languages}` · `{type:"monitor", seq, arabic, preview, is_quran, quran_ref, degraded, corrected}` · `{type:"stt", text}` · `{type:"live", action:"started", started, failed, disabled}` · `{type:"live", action:"stopped"}` · `{type:"live", action:"error", lang, reason}` · `{type:"live", action:"closed", lang}` · `{type:"config_ok", …}`
 **Auditeur → serveur** : `{type:"set_lang", lang}` · `{type:"history"}` · `{type:"ping"}` — la reprise se fait via le query param `?since=<seq>` à la (re)connexion
-**Serveur → auditeur** : `{type:"hello", status, history[], resumed, mosque_name}` · `{type:"phrase", seq, ts, lang, text, arabic, is_quran, quran_ref, is_hadith, degraded, corrected}` · `{type:"interim", arabic}` · `{type:"session", status}` · `{type:"lang_changed", lang, history[]}` · `{type:"history", items[]}`
+**Serveur → auditeur** : `{type:"hello", status, history[], resumed, mosque_name}` · `{type:"phrase", seq, ts, lang, text, arabic, is_quran, quran_ref, is_hadith, degraded, corrected, live}` · `{type:"interim", arabic}` · `{type:"live_partial", lang, text, arabic}` (traduction Live en cours, remplacée par la `phrase` finale) · `{type:"session", status}` · `{type:"lang_changed", lang, history[]}` · `{type:"history", items[]}`
 
 ---
 

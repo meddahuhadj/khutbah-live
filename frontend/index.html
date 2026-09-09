@@ -286,6 +286,8 @@
   #liveLine{position:sticky; bottom:0; background:linear-gradient(180deg,transparent,var(--bg) 45%);
     padding:12px 6px calc(14px + env(safe-area-inset-bottom));
     font-family:"Noto Naskh Arabic","Noto Sans Arabic",serif; color:var(--muted); min-height:2.4em}
+  #liveLine .t{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",Arial,sans-serif; font-size:1em; color:var(--fg); opacity:.94; margin-top:4px}
+  #liveLine .ar{font-size:.95em}
   @keyframes fade{from{opacity:0; transform:translateY(6px)}to{opacity:1}}
   @media (prefers-reduced-motion: reduce){*{animation:none !important; transition:none !important}}
   .sheet{position:fixed; inset:0; background:var(--scrim); display:flex; align-items:flex-end;
@@ -2395,10 +2397,26 @@ function lsOnMsg(m){
     renderHistoryList(m.items||[]);
   }
   else if(m.type==="phrase"){
+    if(m.live) $("#liveLine").innerHTML="";   // la phrase Live vient de se finaliser
     renderPhrase(m,{replay:true});
   }
   else if(m.type==="interim"){
-    $("#liveLine").textContent = m.arabic||"";
+    const el=$("#liveLine");
+    if(LS.showAr && LS.lang!=="ar" && m.arabic){
+      el.innerHTML=`<div class="ar" dir="rtl">${escapeHtml(m.arabic)}</div>`;
+    } else {
+      el.textContent = m.arabic||"";
+    }
+  }
+  else if(m.type==="live_partial"){
+    // Traduction Live en cours : sous-titre vivant, remplacé par la phrase finale.
+    const rtlOut = RTL_LANGS.has(LS.lang);
+    let html="";
+    if(LS.showAr && m.arabic && LS.lang!=="ar"){
+      html += `<div class="ar" dir="rtl">${escapeHtml(m.arabic)}</div>`;
+    }
+    html += `<div class="t" dir="${rtlOut?"rtl":"ltr"}">${escapeHtml(m.text)}</div>`;
+    $("#liveLine").innerHTML = html;
   }
   else if(m.type==="session"){
     LS.status=m.status||LS.status; setConnText();

@@ -174,8 +174,10 @@ class LiveTranslateSession:
             if ot.get("text"):
                 self._on({"type": "translation", "text": ot["text"], "final": True})
             mt = sc.get("modelTurn") or {}
+            # modelTurn.text fait souvent doublon avec outputTranscription : ne
+            # réémettre que s'il apporte un texte différent.
             for part in mt.get("parts", []) or []:
-                if part.get("text"):
+                if part.get("text") and part["text"] != ot.get("text"):
                     self._on({"type": "translation", "text": part["text"], "final": True})
             return
         if "goAway" in msg:
