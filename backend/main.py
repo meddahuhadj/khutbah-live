@@ -24,6 +24,7 @@ WebSocket :
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import json
 import os
@@ -41,7 +42,9 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
+import live_translate
 import quran_index
+import quran_verses
 import translator
 
 # --------------------------------------------------------------------------- #
@@ -116,6 +119,21 @@ class Room:
         self.glossary: str = ""
         self.mosque_name: str = ""
         self.default_langs: list[str] = list(DEFAULT_TARGET_LANGS)
+        # Traduction vocale en flux continu (Gemini Live) : lang -> session.
+        self.live: dict[str, live_translate.LiveTranslateSession] = {}
+        self.live_started_at: float | None = None
+        self.last_live_arabic: str = ""
+
+    # --- Live (flux continu) -------------------------------------------------
+    def live_stop(self) -> None:
+        """Arrête toutes les sessions de traduction live de la room."""
+        for sess in list(self.live.values()):
+            asyncio.create_task(sess.stop())
+        self.live.clear()
+        self.live_started_at = None
+
+    def live_langs(self) -> list[str]:
+        return sorted(self.live.keys())
 
     # --- file de segments ordonnée ---------------------------------------
     def submit_segment(self, *, text: str | None = None, manual: bool = False,
@@ -282,6 +300,7 @@ def _phrase_payload(rec: dict, lang: str) -> dict:
         "is_hadith": rec.get("is_hadith", False),
         "degraded": rec.get("degraded", False),
         "corrected": rec.get("corrected", False),
+        "canonical": rec.get("canonical", False),
     }
 
 
@@ -300,6 +319,7 @@ def _drop_room(code: str) -> None:
     room = ROOMS.pop(code, None)
     if room:
         room.stop_worker()
+        room.live_stop()
 
 
 def _purge_stale(now: float | None = None) -> int:
@@ -385,12 +405,13 @@ async def process_final_segment(room: Room, arabic_text: str, *, manual: bool = 
             "degraded": False, "corrected": False,
         }
         _fill_quran_ref(rec)
+        _apply_canonical_verse(rec)
     room.history.append(rec)
     await _broadcast_record(room, rec, manual=manual)
 
 
 def _fill_quran_ref(rec: dict) -> None:
-    """Repli : verset coranique reconnu mais sans référence -> recherche dans l'index local."""
+    """Repli : verset coranique reconnu mais sans rǸfǸrence -> recherche dans l'index local."""
     if rec.get("is_quran") and not rec.get("quran_ref"):
         try:
             ref = quran_index.find_ref(rec.get("arabic") or "")
@@ -400,6 +421,142 @@ def _fill_quran_ref(rec: dict) -> None:
         if ref:
             rec["quran_ref"] = ref
             rec["quran_ref_guessed"] = True
+
+
+def _apply_canonical_verse(rec: dict) -> None:
+    """Fidge la traduction d'un verset reconnu avec le corpus canonique local
+    (jamais de paraphrase LLM pour le texte coranique). Marque `canonical=True`
+    pour que le diffuseur puisse l'afficher comme fiable."""
+    try:
+        if quran_verses.apply(rec):
+            rec["canonical"] = True
+    except Exception as exc:
+        print(f"[quran_verses] {exc!r}")
+
+
+# --------------------------------------------------------------------------- #
+# Traduction vocale en flux continu (Gemini Live)
+# --------------------------------------------------------------------------- #
+
+
+def _live_handler(room: Room, lang: str):
+    """Callback d'une session Live : publie les traductions reçues."""
+    const_disp = room
+
+    def handle(event: dict):
+        asyncio.create_task(_live_dispatch(const_disp, lang, event))
+
+    return handle
+
+
+async def _live_dispatch(room: Room, lang: str, event: dict):
+    etype = event.get("type")
+    if etype == "transcript":
+        # Transcription source (arabe) en direct : poussée comme ligne live.
+        if event.get("text"):
+            room.last_live_arabic = event["text"]
+            await room.broadcast_all({"type": "interim", "arabic": event["text"]})
+    elif etype == "translation":
+        text = (event.get("text") or "").strip()
+        if text:
+            await publish_live_translation(room, lang, text, room.last_live_arabic)
+    elif etype == "error":
+        await room.notify_broadcaster(
+            {"type": "live", "action": "error", "lang": lang,
+             "reason": event.get("reason") or "unknown"})
+    elif etype == "closed":
+        if room.live.pop(lang, None) is not None:
+            await room.notify_broadcaster(
+                {"type": "live", "action": "closed", "lang": lang})
+
+
+async def publish_live_translation(room: Room, lang: str, text: str,
+                                   arabic: str = "") -> None:
+    """Publie une traduction Live arrivée du modèle (une langue à la fois)."""
+    async with room._lock:
+        room.touch()
+        room.seq += 1
+        seq = room.seq
+        ts = int(time.time() * 1000)
+        rec = {
+            "seq": seq, "ts": ts,
+            "arabic": arabic or room.last_live_arabic,
+            "translations": {lang: text},
+            "is_quran": False, "quran_ref": None, "is_hadith": False,
+            "degraded": False, "corrected": False, "live": True,
+        }
+        room.history.append(rec)
+        payload = _phrase_payload(rec, lang)
+        payload["live"] = True
+        await room.broadcast_lang(lang, payload)
+    await room.notify_broadcaster({
+        "type": "monitor", "seq": seq, "ts": ts,
+        "arabic": rec["arabic"], "preview": text,
+        "is_quran": False, "quran_ref": None,
+        "degraded": False, "degraded_reason": "",
+        "provider": "gemini-live",
+        "corrected": False, "manual": False, "canonical": False,
+        "live": True, "lang": lang,
+    })
+
+
+async def live_start(room: Room) -> dict:
+    """Démarre une session Live par langue cible. Retourne {started, failed}."""
+    if not live_translate.live_enabled(translator.has_api_key()):
+        return {"started": [], "failed": [], "disabled": True}
+    keys = list(translator.GEMINI_KEYS)
+    if not keys:
+        return {"started": [], "failed": [{"lang": "*", "reason": "no_key"}], "disabled": True}
+
+    wanted = [l for l in room.active_target_langs()
+              if l not in room.live and l != "ar"]
+    wanted = wanted[: live_translate.live_max_langs()]
+    pending_targets = list(wanted)
+
+    async def _start_one(room: Room, lang: str) -> bool:
+        sess = live_translate.LiveTranslateSession(
+            keys[0], lang, _live_handler(room, lang))
+        ok = await sess.start()
+        if ok:
+            room.live[lang] = sess
+        return ok
+
+    results = await asyncio.gather(*(_start_one(room, l) for l in pending_targets))
+    started = [l for l, ok in zip(pending_targets, results) if ok]
+    failed = [l for l, ok in zip(pending_targets, results) if not ok]
+    if started:
+        room.live_started_at = time.time()
+    return {"started": started, "failed": failed, "disabled": False}
+
+
+async def live_stop(room: Room) -> None:
+    """Arrête toutes les sessions Live (appelé en fin de direct / purge)."""
+    room.live_stop()
+
+
+_MAX_LIVE_PCM = 1024 * 1024  # 1 Mo max par carte PCM (bien au-delà d'un chunk de 100 ms)
+
+
+async def _relay_live_audio(room: Room, pcm: bytes) -> None:
+    """Relaie un chunk PCM à toutes les sessions Live actives."""
+    if not pcm or not room.live:
+        return
+    for sess in list(room.live.values()):
+        try:
+            if sess.is_active:
+                await sess.send_audio(pcm)
+        except Exception as exc:
+            print(f"[live {sess.target_lang}] relay: {exc!r}")
+
+
+def record_live_audio(room: Room, msg: dict, ws) -> None:
+    try:
+        raw = base64.b64decode(msg.get("data") or "")
+    except Exception:
+        raw = b""
+    if not (0 < len(raw) <= _MAX_LIVE_PCM):
+        return
+    asyncio.create_task(_relay_live_audio(room, raw))
 
 
 async def recorrect_segment(room: Room, seq: int, arabic_text: str):
@@ -428,6 +585,7 @@ async def recorrect_segment(room: Room, seq: int, arabic_text: str):
         rec["degraded"] = False
         rec.pop("quran_ref_guessed", None)
         _fill_quran_ref(rec)
+        _apply_canonical_verse(rec)
     rec["corrected"] = True
     rec["ts"] = int(time.time() * 1000)
     await _broadcast_record(room, rec, corrected=True)
@@ -456,6 +614,7 @@ async def _broadcast_record(room: Room, rec: dict, *, manual: bool = False,
         "provider": ("" if rec.get("degraded") else translator.last_provider()),
         "corrected": corrected,
         "manual": manual,
+        "canonical": rec.get("canonical", False),
     })
 
 
@@ -471,6 +630,7 @@ async def lifespan(app: FastAPI):
     task.cancel()
     for room in list(ROOMS.values()):
         room.stop_worker()
+        room.live_stop()
     await translator.aclose()
 
 
@@ -553,6 +713,9 @@ async def healthz():
         "translate_last_error": translator.last_error() or None,
         "translate_last_provider": translator.last_provider() or None,
         "model": translator.MODEL,
+        "live_enabled": live_translate.live_enabled(translator.has_api_key()),
+        "live_model": live_translate.live_model(),
+        "live_sessions": sum(len(r.live) for r in ROOMS.values()),
     }
 
 
@@ -770,6 +933,11 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
         "mosque_name": room.mosque_name,
         "glossary": room.glossary,
         "target_langs": room.default_langs,
+        "live": {
+            "enabled": live_translate.live_enabled(translator.has_api_key()),
+            "model": live_translate.live_model(),
+            "max_langs": live_translate.live_max_langs(),
+        },
     }, ensure_ascii=False))
     await room.broadcast_all({"type": "session", "status": room.status})
 
@@ -846,6 +1014,24 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
                 except (TypeError, ValueError):
                     pass
 
+            elif mtype == "live_start":
+                res = await live_start(room)
+                await ws.send_text(json.dumps({
+                    "type": "live", "action": "started",
+                    "started": res.get("started", []),
+                    "failed": res.get("failed", []),
+                    "disabled": res.get("disabled", False),
+                }, ensure_ascii=False))
+
+            elif mtype == "live_stop":
+                await live_stop(room)
+                await ws.send_text(json.dumps(
+                    {"type": "live", "action": "stopped"}, ensure_ascii=False))
+
+            elif mtype == "live_audio":
+                # PCM 16 kHz mono brut (16 bits, little-endian), base64.
+                record_live_audio(room, msg, ws)
+
             elif mtype == "ping":
                 await ws.send_text(json.dumps({"type": "pong", "t": msg.get("t")}))
 
@@ -857,6 +1043,7 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
         if room.broadcaster is ws:
             room.broadcaster = None
             room.status = "paused" if room.status == "live" else room.status
+            room.live_stop()
             await room.broadcast_all({"type": "session", "status": room.status,
                                       "broadcaster_gone": True})
 

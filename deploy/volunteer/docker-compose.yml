@@ -1,0 +1,56 @@
+# Déploiement "bénévole" : la mosquée = une boîte dans le coin.
+# Caddy gère HTTPS automatiquement + certificats ; l'application tourne dans
+# le conteneur `khutbah` (Dockerfile racine du dépôt).
+#
+# Usage :
+#   cd deploy/volunteer && sudo ./setup.sh
+# (ou, sans le script : `docker compose up -d` après avoir créé .env et Caddyfile)
+#
+# Notes :
+#   - WebSockets longue durée : aucun proxy_read_timeout à régler, Caddy gère.
+#   - Le port 80/443 doivent être ouverts depuis Internet vers cette machine
+#     (ou on utilise un tunnel Cloudflare, cf. .env + services ci-dessous).
+#   - Les clés API restent dans le .env, jamais commité.
+
+services:
+  khutbah:
+    image: khutbah:latest            # ou `build: ../../` pour construire depuis le dépôt
+    build:
+      context: ../..
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    expose:
+      - "8000"                       # réseau interne, pas publié directement
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - khutbah
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - TZ=Etc/UTC
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # --- Facultatif : tunnel Cloudflare pour éviter d'exposer la box sur Internet.
+  # Décommentez si la mosquée n'a pas de port 80/443 public (CGNAT, box opérateur...).
+  # Renommez `cloudflared` ci-dessous et renseignez CLOUDFLARE_TUNNEL_TOKEN dans .env.
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   restart: unless-stopped
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   depends_on:
+  #     - caddy
+
+volumes:
+  caddy_data:
+  caddy_config:

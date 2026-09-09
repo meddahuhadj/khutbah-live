@@ -1,0 +1,3 @@
+# Conserve le bit +x pour les scripts déployés sur Linux/pour le téléchargement
+deploy/volunteer/setup.sh -text
+* text=auto

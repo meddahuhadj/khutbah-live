@@ -1,4 +1,5 @@
 """Flux WebSocket bout-en-bout (diffuseur -> serveur -> auditeur), Gemini mocké."""
+import asyncio
 import json
 
 
@@ -67,7 +68,25 @@ def test_quran_ref_backfilled_when_missing(app_client):
             assert p["quran_ref_guessed"] is True
 
 
-def test_resume_since_returns_only_missed(app_client):
+def test_canonical_verse_overrides_llm_translation(app_client):
+    code, tok = _new_session(app_client, target_langs=["fr"])
+    with app_client.websocket_connect(f"/ws/broadcast/{code}?token={tok}") as b:
+        _drain(b, "hello")
+        with app_client.websocket_connect(f"/ws/listen/{code}?lang=fr") as l:
+            _drain(l, "hello")
+            # Le mock renvoie is_quran=True + quran_ref=1:2 ; le corpus canonique
+            # doit remplacer la traduction du LLM par la traduction figee.
+            b.send_text(json.dumps({"type": "transcript",
+                                    "text": "الحمد لله رب العالمين",
+                                    "is_final": True}))
+            p = _drain(l, "phrase")
+            assert p["is_quran"] is True
+            assert p["quran_ref"] == "1:2"
+            assert p["canonical"] is True
+            assert "Louange à Allah" in p["text"]
+
+
+
     code, tok = _new_session(app_client, target_langs=["fr"])
     with app_client.websocket_connect(f"/ws/broadcast/{code}?token={tok}") as b:
         _drain(b, "hello")
@@ -120,3 +139,151 @@ def test_stats_pushed_to_broadcaster_on_listener_join(app_client):
             st = _drain(b, "stats")
             assert st["listeners"] == 1
             assert st["languages"].get("fr") == 1
+
+
+# --------------------------------------------------------------------------- #
+# Traduction vocale en flux continu (Gemini Live)
+# --------------------------------------------------------------------------- #
+
+
+def test_live_start_reports_disabled_when_no_key(app_client, monkeypatch):
+    import live_translate
+    monkeypatch.setattr(live_translate, "LIVE_ENABLED", True)
+    monkeypatch.setattr("translator.GEMINI_KEYS", [])
+
+    code, tok = _new_session(app_client, target_langs=["fr"])
+    with app_client.websocket_connect(f"/ws/broadcast/{code}?token={tok}") as b:
+        _drain(b, "hello")
+        b.send_text(json.dumps({"type": "live_start"}))
+        m = _drain(b, "live")
+        assert m["action"] == "started"
+        assert m["disabled"] is True
+
+
+def test_live_start_opens_session_per_lang_and_relays(app_client, monkeypatch):
+    import time
+
+    import live_translate
+
+    created = []
+
+    class FakeLiveWS:
+        def __init__(self):
+            self.sent = []
+            self._emitted = [{"setupComplete": {}}]
+        async def send(self, raw):
+            self.sent.append(raw)
+        async def close(self):
+            self._emitted.clear()
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            while not self._emitted:
+                await asyncio.sleep(0.02)
+            return json.dumps(self._emitted.pop(0))
+
+    async def connector(url, **kw):
+        fake = FakeLiveWS()
+        created.append(fake)
+        return fake
+
+    monkeypatch.setattr(live_translate, "_connect", connector)
+    monkeypatch.setattr(live_translate, "LIVE_CONNECT_RETRIES", 0)
+    monkeypatch.setattr("translator.GEMINI_KEYS", ["k-live"])
+
+    code, tok = _new_session(app_client, target_langs=["fr", "en"])
+    with app_client.websocket_connect(f"/ws/broadcast/{code}?token={tok}") as b:
+        _drain(b, "hello")
+        b.send_text(json.dumps({"type": "live_start", "langs": ["fr", "en"]}))
+        m = _drain(b, "live")
+        assert m["action"] == "started"
+        assert m["disabled"] is False
+        assert set(m["started"]) == {"fr", "en"}
+        assert len(created) == 2
+
+        # le flux audio PCM est relayé à chaque session Live
+        import base64
+        b.send_text(json.dumps({
+            "type": "live_audio",
+            "data": base64.b64encode(b"\x00\x01" * 800).decode("ascii"),
+        }))
+        time.sleep(0.4)
+        for fake in created:
+            assert len(fake.sent) == 2
+            real = json.loads(fake.sent[1])["realtimeInput"]["audio"]
+            assert real["mimeType"] == "audio/pcm;rate=16000"
+
+        b.send_text(json.dumps({"type": "live_stop"}))
+        m2 = _drain(b, "live")
+        assert m2["action"] == "stopped"
+
+
+def test_live_translation_fanned_out_to_listeners(app_client, monkeypatch):
+    import asyncio
+    import base64
+
+    import live_translate
+
+    by_lang = {}
+    emitted_done = asyncio.Event()
+
+    class FakeLiveWS:
+        def __init__(self):
+            self.sent = []
+            self.lang = None
+            self._emitted = [{"setupComplete": {}}]
+        async def send(self, raw):
+            self.sent.append(raw)
+            msg = json.loads(raw)
+            if self.lang is None and "setup" in msg:
+                self.lang = msg["setup"]["generationConfig"]["translationConfig"]["targetLanguageCode"]
+                by_lang[self.lang] = self
+            if "realtimeInput" in msg:
+                pcm = base64.b64decode(msg["realtimeInput"]["audio"]["data"])
+                arabic = "بسم الله"
+                text = ("Au nom d'Allah" if self.lang == "fr"
+                        else "In the name of Allah")
+                self._emitted.append({
+                    "serverContent": {
+                        "inputTranscription": {"text": arabic},
+                        "outputTranscription": {"text": text},
+                        "modelTurn": {"parts": [{"text": text}]},
+                    }
+                })
+                emitted_done.set()
+        async def close(self):
+            self._emitted.clear()
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            while not self._emitted:
+                await asyncio.sleep(0.02)
+            return json.dumps(self._emitted.pop(0))
+
+    async def connector(url, **kw):
+        return FakeLiveWS()
+
+    monkeypatch.setattr(live_translate, "_connect", connector)
+    monkeypatch.setattr(live_translate, "LIVE_CONNECT_RETRIES", 0)
+    monkeypatch.setattr("translator.GEMINI_KEYS", ["k-live"])
+
+    code, tok = _new_session(app_client, target_langs=["fr", "en"])
+    with app_client.websocket_connect(f"/ws/broadcast/{code}?token={tok}") as b:
+        _drain(b, "hello")
+        b.send_text(json.dumps({"type": "live_start"}))
+        m = _drain(b, "live")
+        assert m["disabled"] is False
+        assert set(m["started"]) == {"en", "fr"}
+
+        with app_client.websocket_connect(f"/ws/listen/{code}?lang=fr") as l:
+            _drain(l, "hello")
+            # seul un auditeur fr : le flux PCM déclenche la traduction fr
+            b.send_text(json.dumps({
+                "type": "live_audio",
+                "data": base64.b64encode(b"\x10\x00" * 500).decode("ascii"),
+            }))
+            p = _drain(l, "phrase", tries=20)
+            assert p.get("live") is True
+            assert "Au nom d'Allah" in p["text"]
+            assert p.get("arabic") == "بسم الله"
+            emitted_done.set()

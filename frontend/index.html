@@ -689,6 +689,7 @@
         <div class="seg" id="bc-modeSeg">
           <button data-mode="speech" class="on" data-i18n="mode_speech">Reconnaissance navigateur</button>
           <button data-mode="audio" data-i18n="mode_audio">Audio → serveur</button>
+          <button data-mode="live" data-i18n="mode_live">Traduction directe (Live)</button>
           <button data-mode="manual" data-i18n="mode_manual">Manuel</button>
         </div>
         <p class="muted" id="bc-modeHint" style="font-size:.8rem; margin-top:6px"></p>
@@ -881,7 +882,7 @@ const I18N = {
     bc_setup_h:"Démarrer une session de khutbah",bc_setup_p:"Un code + un QR code seront générés pour que les fidèles puissent suivre le prêche.",
     bc_create:"Créer la session",bc_nokey:"Clé Gemini absente : mode dégradé (arabe diffusé sans traduction).",
     bc_code:"Code de session",bc_copylink:"Copier le lien",bc_share:"Partager",bc_listeners:"auditeurs",
-    bc_mode:"Mode de captation",mode_speech:"Reconnaissance navigateur",mode_audio:"Audio → serveur",mode_manual:"Manuel",
+    bc_mode:"Mode de captation",mode_speech:"Reconnaissance navigateur",mode_audio:"Audio → serveur",mode_live:"Traduction directe (Live)",mode_manual:"Manuel",
     bc_srlang:"Langue parlée par l'imam",bc_level:"Niveau sonore du micro",
     bc_start:"Démarrer",bc_pause:"Pause",bc_stop:"Arrêter",bc_resume:"Reprendre",
     bc_manualLbl:"Saisir / coller le texte arabe puis envoyer",bc_manualSend:"Envoyer",
@@ -889,6 +890,11 @@ const I18N = {
     hint_speech:"Le navigateur transcrit l'arabe (Chrome recommandé). Rien n'est envoyé en audio : bande passante minimale.",
     hint_audio:"L'audio est envoyé au serveur par tranches et transcrit par Gemini. Utile si la reconnaissance navigateur est indisponible.",
     hint_manual:"Vous tapez ou collez le texte arabe. Utile pour un texte préparé ou en secours.",
+    hint_live:"Le micro est envoyé en flux continu à Gemini : traduction quasi instantanée et précise, sans découpage en phrases.",
+    live_disabled:"Traduction directe indisponible (aucune clé Gemini). Utilisez « Audio → serveur » ou « Manuel ».",
+    live_failed:"Sessions directes échouées : ",
+    live_closed:"Session directe arrêtée par le serveur : ",
+    live_error:"Erreur de session directe : ",
     join_h:"Rejoindre une session",join_code:"Code de session",join_lang:"Ma langue",join_recv:"Recevoir la traduction en",
     recv_text:"Sous-titres",recv_voice:"Voix (TTS)",recv_both:"Les deux",join_go:"Rejoindre",
     join_tip:"Astuce : scannez le QR code affiché à l'entrée pour rejoindre en 1 tap.",
@@ -908,13 +914,18 @@ const I18N = {
     bc_setup_h:"Start a khutbah session",bc_setup_p:"A code + QR code will be generated so attendees can follow the sermon.",
     bc_create:"Create session",bc_nokey:"No Gemini key: degraded mode (Arabic relayed without translation).",
     bc_code:"Session code",bc_copylink:"Copy link",bc_share:"Share",bc_listeners:"listeners",
-    bc_mode:"Capture mode",mode_speech:"Browser recognition",mode_audio:"Audio → server",mode_manual:"Manual",
+    bc_mode:"Capture mode",mode_speech:"Browser recognition",mode_audio:"Audio → server",mode_live:"Direct translation (Live)",mode_manual:"Manual",
     bc_srlang:"Language spoken by the imam",bc_level:"Microphone level",
     bc_start:"Start",bc_pause:"Pause",bc_stop:"Stop",bc_resume:"Resume",
     bc_manualLbl:"Type / paste the Arabic text then send",bc_manualSend:"Send",bc_monitor:"Monitor (last segment)",
     hint_speech:"The browser transcribes Arabic (Chrome recommended). No audio is sent: minimal bandwidth.",
     hint_audio:"Audio is sent to the server in chunks and transcribed by Gemini. Use if browser recognition is unavailable.",
     hint_manual:"You type or paste the Arabic text. Useful for prepared text or as a fallback.",
+    hint_live:"The microphone is streamed continuously to Gemini: near-instant, accurate translation without sentence chunking.",
+    live_disabled:"Direct translation unavailable (no Gemini key). Use “Audio → server” or “Manual”.",
+    live_failed:"Direct sessions failed: ",
+    live_closed:"Direct session stopped by the server: ",
+    live_error:"Direct session error: ",
     join_h:"Join a session",join_code:"Session code",join_lang:"My language",join_recv:"Receive the translation as",
     recv_text:"Subtitles",recv_voice:"Voice (TTS)",recv_both:"Both",join_go:"Join",
     join_tip:"Tip: scan the QR code at the entrance to join in one tap.",
@@ -934,13 +945,18 @@ const I18N = {
     bc_setup_h:"Een khutbah-sessie starten",bc_setup_p:"Er worden een code + QR-code gegenereerd zodat de aanwezigen de preek kunnen volgen.",
     bc_create:"Sessie aanmaken",bc_nokey:"Geen Gemini-sleutel: beperkte modus (Arabisch zonder vertaling).",
     bc_code:"Sessiecode",bc_copylink:"Link kopiëren",bc_share:"Delen",bc_listeners:"luisteraars",
-    bc_mode:"Opnamemodus",mode_speech:"Browserherkenning",mode_audio:"Audio → server",mode_manual:"Handmatig",
+    bc_mode:"Opnamemodus",mode_speech:"Browserherkenning",mode_audio:"Audio → server",mode_live:"Directe vertaling (Live)",mode_manual:"Handmatig",
     bc_srlang:"Taal gesproken door de imam",bc_level:"Microfoonniveau",
     bc_start:"Starten",bc_pause:"Pauze",bc_stop:"Stoppen",bc_resume:"Hervatten",
     bc_manualLbl:"Typ / plak de Arabische tekst en verstuur",bc_manualSend:"Versturen",bc_monitor:"Monitor (laatste segment)",
     hint_speech:"De browser transcribeert Arabisch (Chrome aanbevolen). Er wordt geen audio verzonden: minimale bandbreedte.",
     hint_audio:"Audio wordt in stukjes naar de server gestuurd en door Gemini getranscribeerd. Gebruik dit als browserherkenning niet beschikbaar is.",
     hint_manual:"Je typt of plakt de Arabische tekst. Handig voor voorbereide tekst of als noodoplossing.",
+    hint_live:"De microfoon wordt continu naar Gemini gestuurd: bijna onmiddellijke, nauwkeurige vertaling zonder opdeling in zinnen.",
+    live_disabled:"Directe vertaling niet beschikbaar (geen Gemini-sleutel). Gebruik “Audio → server” of “Handmatig”.",
+    live_failed:"Directe sessies mislukt: ",
+    live_closed:"Directe sessie gestopt door de server: ",
+    live_error:"Directe sessie-fout: ",
     join_h:"Deelnemen aan een sessie",join_code:"Sessiecode",join_lang:"Mijn taal",join_recv:"Ontvang de vertaling als",
     recv_text:"Ondertitels",recv_voice:"Stem (TTS)",recv_both:"Beide",join_go:"Deelnemen",
     join_tip:"Tip: scan de QR-code bij de ingang om met één tik deel te nemen.",
@@ -960,13 +976,18 @@ const I18N = {
     bc_setup_h:"بدء جلسة خطبة",bc_setup_p:"سيتم إنشاء رمز ورمز QR ليتمكّن المصلّون من متابعة الخطبة.",
     bc_create:"إنشاء الجلسة",bc_nokey:"لا يوجد مفتاح Gemini: وضع محدود (بثّ العربية بدون ترجمة).",
     bc_code:"رمز الجلسة",bc_copylink:"نسخ الرابط",bc_share:"مشاركة",bc_listeners:"مستمعون",
-    bc_mode:"وضع الالتقاط",mode_speech:"تعرّف المتصفّح",mode_audio:"الصوت → الخادم",mode_manual:"يدوي",
+    bc_mode:"وضع الالتقاط",mode_speech:"تعرّف المتصفّح",mode_audio:"الصوت → الخادم",mode_live:"ترجمة مباشرة (Live)",mode_manual:"يدوي",
     bc_srlang:"اللغة التي يتحدّث بها الإمام",bc_level:"مستوى صوت الميكروفون",
     bc_start:"ابدأ",bc_pause:"إيقاف مؤقّت",bc_stop:"إيقاف",bc_resume:"استئناف",
     bc_manualLbl:"اكتب / الصق النص العربي ثمّ أرسل",bc_manualSend:"إرسال",bc_monitor:"المراقب (آخر مقطع)",
     hint_speech:"يقوم المتصفّح بتفريغ العربية (يُنصح بمتصفّح Chrome). لا يُرسَل أي صوت: أقل استهلاك للبيانات.",
     hint_audio:"يُرسَل الصوت إلى الخادم على دفعات ويُفرَّغ بواسطة Gemini. استخدمه إذا لم يتوفّر تعرّف المتصفّح.",
     hint_manual:"تكتب أو تلصق النص العربي. مفيد لنصّ مُعَدّ مسبقًا أو كحل احتياطي.",
+    hint_live:"يُرسَل الميكروفون بشكل متواصل إلى Gemini: ترجمة شبه فورية ودقيقة دون تقسيم إلى جُمل.",
+    live_disabled:"الترجمة المباشرة غير متاحة (لا يوجد مفتاح Gemini). استخدم «الصوت → الخادم» أو «يدوي».",
+    live_failed:"فشلت الجلسات المباشرة: ",
+    live_closed:"أوقفت الخادم الجلسة المباشرة: ",
+    live_error:"خطأ في الجلسة المباشرة: ",
     join_h:"الانضمام إلى جلسة",join_code:"رمز الجلسة",join_lang:"لغتي",join_recv:"استقبال الترجمة على شكل",
     recv_text:"ترجمة نصّية",recv_voice:"صوت (TTS)",recv_both:"الاثنان",join_go:"انضمام",
     join_tip:"نصيحة: امسح رمز QR عند المدخل للانضمام بلمسة واحدة.",
@@ -1259,7 +1280,7 @@ function applyI18n(){
   document.querySelectorAll("[data-i18n]").forEach(el=>{ el.textContent = t(el.getAttribute("data-i18n")); });
   document.querySelectorAll("[data-i18n-aria]").forEach(el=>{ el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria"))); });
   document.querySelectorAll("[data-i18n-html]").forEach(el=>{ el.innerHTML = t(el.getAttribute("data-i18n-html")); });
-  const hint = { speech:"hint_speech", audio:"hint_audio", manual:"hint_manual" }[bcMode];
+  const hint = { speech:"hint_speech", audio:"hint_audio", live:"hint_live", manual:"hint_manual" }[bcMode];
   const he = $("#bc-modeHint"); if(he && hint) he.textContent = t(hint);
   updateDhikr && updateDhikr();
   renderHijriDate && renderHijriDate();
@@ -1798,6 +1819,7 @@ $("#join-code").addEventListener("change",e=>{
 const BC = {
   code:null, token:null, ws:null, recog:null, recording:false, status:"idle",
   audioStream:null, mediaRec:null, analyser:null, rafMeter:null, geminiOn:true,
+  liveInfo:null, liveOn:false, liveCtx:null, liveSrc:null, liveProc:null,
   lastSeq:0,
 };
 
@@ -1808,7 +1830,7 @@ function bcSetupCaps(){
 
   if(!MIC_OK){
     // Page non sécurisée (http://192.168.x.x…) → aucun accès micro : seul le mode Manuel marche.
-    disable("speech"); disable("audio");
+    disable("speech"); disable("audio"); disable("live");
     bcMode = "manual";
     $$('#bc-modeSeg button').forEach(x=>x.classList.toggle("on", x.dataset.mode==="manual"));
     $("#bc-manualBox").classList.toggle("hidden", false);
@@ -1816,12 +1838,24 @@ function bcSetupCaps(){
     const note=$("#bc-modeHint"); if(note) note.textContent = t("bc_insecure");
     return;
   }
+  if(BC.liveInfo && !BC.liveInfo.enabled) bcSetLiveDisabled();
   if(!HAS_SR){
     disable("speech");
     bcMode = HAS_MR ? "audio" : "manual";
     $$('#bc-modeSeg button').forEach(x=>x.classList.toggle("on", x.dataset.mode===bcMode));
     $("#bc-manualBox").classList.toggle("hidden", bcMode!=="manual");
     const note=$("#bc-modeHint"); if(note) note.textContent = t("ios_note");
+  }
+}
+
+/* Le mode Live nécessite une clé Gemini côté serveur : grisé sinon. */
+function bcSetLiveDisabled(){
+  const b=$('#bc-modeSeg button[data-mode="live"]'); if(!b) return;
+  b.disabled=true; b.style.opacity=.45;
+  if(bcMode==="live"){
+    bcMode="manual";
+    $$('#bc-modeSeg button').forEach(x=>x.classList.toggle("on", x.dataset.mode==="manual"));
+    $("#bc-manualBox").classList.toggle("hidden", false);
   }
 }
 bcSetupCaps();
@@ -1869,7 +1903,8 @@ function bcConnect(){
     bcOnMsg,
     st=>{
       const dot=$("#bc-connDot"), txt=$("#bc-connTxt");
-      if(st==="open"){ dot.className="dot live"; txt.textContent=t("conn_live"); bcSendStatus(); }
+      if(st==="open"){ dot.className="dot live"; txt.textContent=t("conn_live"); bcSendStatus();
+        if(BC.liveOn) startLiveSession(); }
       else if(st==="connecting"){ dot.className="dot warn"; txt.textContent=t("conn_connecting"); }
       else if(st==="reconnect"){ dot.className="dot warn"; txt.textContent=t("conn_reconnect"); }
       else { dot.className="dot off"; txt.textContent=t("conn_offline"); }
@@ -1880,6 +1915,7 @@ function bcSendStatus(){}
 
 function bcOnMsg(m){
   if(m.type==="hello" || m.type==="stats"){
+    if(m.live){ BC.liveInfo=m.live; if(!BC.liveInfo.enabled) bcSetLiveDisabled(); }
     if(typeof m.listeners==="number") $("#bc-count").textContent=m.listeners;
     const langs=m.languages||{}; const chips=$("#bc-langchips");
     chips.innerHTML = Object.keys(langs).length
@@ -1896,6 +1932,7 @@ function bcOnMsg(m){
     if(m.is_quran) bits.push("Coran"+(m.quran_ref?(" — "+m.quran_ref):""));
     if(m.corrected) bits.push("✏️ corrigé");
     if(m.manual) bits.push("manuel");
+    if(m.live) bits.push("⚡ direct");
     if(m.provider && m.provider!=="gemini") bits.push("↻ "+m.provider);
     if(m.degraded){
       const rk = {quota:"deg_quota", auth:"deg_auth", server:"deg_server",
@@ -1919,6 +1956,23 @@ function bcOnMsg(m){
     $("#bc-monAr").textContent = m.text||"";
     if(BC.status==="live" && typeof bcSpeechStatus==="function") bcSpeechStatus("ok");
   }
+  else if(m.type==="live"){
+    if(m.action==="started"){
+      if(m.disabled){
+        BC.liveOn=false;
+        bcSetLiveDisabled();
+        bcSpeechStatus("err", t("live_disabled")); toast(t("live_disabled"));
+      } else if(m.started && m.started.length){
+        BC.liveOn=true;
+        bcSpeechStatus("ok");
+        startLiveCapturing();
+      }
+      if(m.failed && m.failed.length) toast(t("live_failed")+m.failed.map(f=>f.lang).join(", "));
+    }
+    else if(m.action==="stopped"){ BC.liveOn=false; stopLiveCapturing(); }
+    else if(m.action==="closed"){ stopLiveCapturing(); toast(t("live_closed")+(m.lang||"")); }
+    else if(m.action==="error"){ toast(t("live_error")+(m.lang||"")+" — "+(m.reason||"")); }
+  }
   else if(m.type==="config_ok"){ toast("Glossaire mis à jour"); }
   else if(m.type==="error"){ toast(m.message||"erreur"); }
 }
@@ -1939,10 +1993,15 @@ $("#btnCorrectSend").addEventListener("click", ()=>{
 
 /* --- sélecteur de mode --- */
 $$("#bc-modeSeg button").forEach(b=>b.addEventListener("click",()=>{
+  const prev=bcMode;
   $$("#bc-modeSeg button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
   bcMode=b.dataset.mode;
   $("#bc-manualBox").classList.toggle("hidden", bcMode!=="manual");
   $("#bc-srlang").parentElement && ($("#bc-srlang").disabled = (bcMode!=="speech"));
+  if(BC.status==="live"){
+    if(prev==="live" && bcMode!=="live"){ stopLiveCapturing(); BC.liveOn=false; BC.ws && BC.ws.send({type:"live_stop"}); }
+    else if(bcMode==="live" && prev!=="live") startLiveSession();
+  }
   applyI18n();
 }));
 
@@ -1956,18 +2015,23 @@ $("#btnStart").addEventListener("click", async ()=>{
   $("#btnPause").classList.remove("hidden"); $("#btnStop").classList.remove("hidden");
   if(bcMode==="speech")      startSpeechRecognition();
   else if(bcMode==="audio")  startAudioStreaming();
+  else if(bcMode==="live")   startLiveSession();
   else bcSpeechStatus("manual");
 });
 $("#btnPause").addEventListener("click", ()=>{
   if(BC.status==="live"){ BC.status="paused"; BC.ws.send({type:"control",action:"pause"});
-    stopSpeechRecognition(); stopAudioStreaming(); bcSpeechStatus("paused"); $("#btnPause").textContent=t("bc_resume"); }
+    stopSpeechRecognition(); stopAudioStreaming();
+    if(bcMode==="live"){ stopLiveCapturing(); BC.ws.send({type:"live_stop"}); }
+    bcSpeechStatus("paused"); $("#btnPause").textContent=t("bc_resume"); }
   else { BC.status="live"; BC.ws.send({type:"control",action:"resume"});
     if(bcMode==="speech") startSpeechRecognition(); else if(bcMode==="audio") startAudioStreaming();
+    else if(bcMode==="live") startLiveSession();
     $("#btnPause").textContent=t("bc_pause"); }
 });
 $("#btnStop").addEventListener("click", ()=>{
   BC.status="stopped"; BC.ws.send({type:"control",action:"stop"});
   stopSpeechRecognition(); stopAudioStreaming(); bcStopMeter();
+  if(bcMode==="live"){ stopLiveCapturing(); BC.ws.send({type:"live_stop"}); }
   clearTimeout(BC._srWatch); $("#bc-srStatus").classList.add("hidden");
   $("#btnStart").classList.remove("hidden"); $("#btnPause").classList.add("hidden"); $("#btnStop").classList.add("hidden");
   $("#btnPause").textContent=t("bc_pause");
@@ -2176,6 +2240,57 @@ async function startAudioStreaming(){
   BC.mediaRec.start(4000);     // une tranche toutes les 4 s
 }
 function stopAudioStreaming(){ if(BC.mediaRec){ try{ BC.mediaRec.stop(); }catch(e){} BC.mediaRec=null; } }
+
+/* --- Traduction en flux continu (Gemini Live) --- */
+function startLiveSession(){
+  if(!BC.ws) return;
+  bcSpeechStatus("wait");
+  BC.ws.send({type:"live_start"});
+}
+
+const LIVE_PCM_RATE = 16000;             // exigé par le modèle Live (audio/pcm;rate=16000)
+
+function pcmInt16ToB64(int16){
+  const bytes=new Uint8Array(int16.buffer);
+  let bin=""; const CH=0x8000;
+  for(let i=0;i<bytes.length;i+=CH) bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+CH));
+  return btoa(bin);
+}
+
+async function startLiveCapturing(){
+  if(BC.liveProc) return;          // déjà en cours
+  if(!BC.audioStream){
+    try{ BC.audioStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}); }
+    catch(e){ bcSpeechStatus("err", t("mic_denied")); toast(t("mic_denied")); return; }
+  }
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC){ bcSpeechStatus("err", t("live_disabled")); return; }
+  let ctx=null;
+  try{ ctx=new AC({sampleRate:LIVE_PCM_RATE}); }catch(e){}
+  if(!ctx){ try{ ctx=new AC(); }catch(e){ bcSpeechStatus("err", t("live_disabled")); return; } }
+  ctx.resume && ctx.resume();
+  BC.liveCtx=ctx;
+  let src, proc;
+  try{
+    src=ctx.createMediaStreamSource(BC.audioStream);
+    proc=ctx.createScriptProcessor(2048, 1, 1);   // ~128 ms à 16 kHz
+    BC.liveSrc=src; BC.liveProc=proc;
+    proc.onaudioprocess=ev=>{
+      if(BC.status!=="live" || bcMode!=="live") return;
+      const data=ev.inputBuffer.getChannelData(0);
+      const len=data.length; const out=new Int16Array(len);
+      for(let i=0;i<len;i++){ const v=data[i]<-1?-1:(data[i]>1?1:data[i]);
+        out[i]=v<0?Math.round(v*0x8000):Math.round(v*0x7FFF); }
+      if(BC.ws) BC.ws.send({type:"live_audio", data:pcmInt16ToB64(out)});
+    };
+    src.connect(proc); proc.connect(ctx.destination);
+  }catch(e){ stopLiveCapturing(); bcSpeechStatus("err", "Live: "+(e.message||e)); }
+}
+function stopLiveCapturing(){
+  if(BC.liveProc){ try{ BC.liveProc.disconnect(); }catch(e){} BC.liveProc=null; }
+  if(BC.liveSrc){ try{ BC.liveSrc.disconnect(); }catch(e){} BC.liveSrc=null; }
+  if(BC.liveCtx){ try{ BC.liveCtx.close(); }catch(e){} BC.liveCtx=null; }
+}
 
 /* ==========================================================================
    ========================  AUDITEUR  ====================================

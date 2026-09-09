@@ -86,9 +86,25 @@ Pour ne plus jamais tomber en mode dégradé sur un simple quota gratuit épuis�
   - **`azure`** (`AZURE_TRANSLATOR_KEY` + `AZURE_TRANSLATOR_REGION`) — **2 M caractères/mois gratuits**, ultra-fiable. Traduction pure : pas de détection Coran (mais l'index local ci-dessus prend le relais).
 - **Transcription audio** (`STT_PROVIDERS`, défaut `groq,gemini`) : **Groq Whisper large-v3** (gratuit, excellent en arabe/darija) puis Gemini.
 - Si **tous** échouent → mode dégradé (arabe diffusé), avec la cause réelle affichée (`quota` / `auth` / `no_provider`…). `/healthz` expose `translate_providers`, `translate_last_provider`, `translate_last_error` ; le moniteur diffuseur affiche `↻ groq` quand un repli a servi.
-- Voir `backend/.env.example` pour toutes les variables. **48 tests** (`backend/tests/`).
+- Voir `backend/.env.example` pour toutes les variables. **54 tests** (`backend/tests/`).
 
 **Hébergement gratuit sans mise en veille** (vs Render Free qui s'endort après 15 min) : Fly.io, Koyeb, Oracle Cloud Always Free (VM permanente + Caddy), ou PC de la mosquée + Cloudflare Tunnel.
+
+### Fidélité religieuse & déploiement bénévole (v2.1)
+
+- **Corpus canonique de versets** (`backend/quran_verses.py` + `backend/data/quran_verses.json`) : quand un segment est reconnu comme **verset coranique** (référence fournie par le modèle *ou* retrouvée par l'index local), sa traduction est **remplacée par une traduction figée et sourcée** — le texte d'un verset n'est **jamais** confié à un LLM au vol. Ne sont écrasées que les langues couvertes par le corpus ; les autres gardent la traduction du modèle. Le segment est marqué `canonical:true` (badge « fidèle » sur le moniteur diffuseur). Le fichier est un **seed extensible** : ajoutez les versets les plus cités de vos khutbahs (le mécanisme charge tout `.json` à la volée). 20 versets célèbres pré-remplis (Fatiha 1:1-7, Ayat al-Kursi 2:255, Ikhlas 112, Asr 103…).
+- **Pack « bénévole »** (`deploy/volunteer/`) : déployer la khutbah sur un mini-PC / Raspberry Pi de la mosquée en ~10 min, **par un non-technicien** — `setup.sh` interactif (clés API, domaine, tunnel Cloudflare optionnel), `docker-compose.yml` (app + Caddy HTTPS auto + WebSocket), `Caddyfile.template`, README de dépannage. Plus aucune dépendance à render.yaml / PaaS pour un usage terrain.
+- **48 → 54 tests** (`backend/tests/`), dont `test_quran_verses.py` (corpus canonique) et un test bout-en-bout WebSocket qui vérifie que le verset diffusé est bien la traduction figée.
+
+### Traduction en flux continu (v2.2)
+
+Le mode **« Traduction directe (Live) »** du diffuseur branche le micro sur **Gemini Live API** (`gemini-3.5-live-translate-preview`) : l'audio PCM est envoyé **en continu** au backend, qui le relaie en parallèle à une session Live **par langue cible**. Gemini renvoie la traduction **quasi instantanément, sans découpage en phrases**, et le serveur la fan-out aux auditeurs comme un `phrase` normal (marqué `live:true`, `provider:gemini-live`).
+
+- **Un flux audio, plusieurs langues** : le backend ouvre une session par langue active (`LIVE_MAX_LANGS`, défaut 4) et relaie le même PCM à toutes — le coût en bande passante est indépendant du nombre d'auditeurs.
+- **Repli automatique** : si une session Live échoue à l'établissement (`setupComplete` non reçu, quota…) ou se ferme en cours de direct, le serveur prévient le diffuseur (`{type:"live", action:"error"/"closed"}`) qui voit le message ; le mode segmenté existant reste disponible d'un clic. Transcription source (arabe) propagée en `interim` comme en mode classique.
+- **Configuration** (`backend/.env`) : `LIVE_ENABLED=1/0`, `LIVE_MODEL`, `LIVE_MAX_LANGS`, `LIVE_SETUP_TMO`, `LIVE_CONNECT_RETRIES`. Nécessite une clé Gemini (`GEMINI_API_KEY`/`GEMINI_API_KEYS`) ; sans clé le bouton « Live » est **grisé** côté navigateur.
+- **Contribution audio** : `frontend` capture le micro via `getUserMedia`, le convertit en **PCM 16 kHz mono 16-bit** (`AudioContext({sampleRate:16000})`), l'envoie par chunks (`live_audio`), démarre (`live_start`) et arrête (`live_stop`, pause/stop/reconnexion gérés).
+- **64 tests** (`backend/tests/`), dont `test_live_translate.py` (session Live mockée, gestion des événements serveur) et des tests bout-en-bout WebSocket (ouverture multi-langues, fan-out `live:true`).
 
 ---
 
@@ -153,7 +169,7 @@ Pas de compte, pas de collecte. L'audio **n'est jamais stocké** (chemin STT nav
 
 | Besoin | Options | Retenu | Pourquoi |
 |--------|---------|--------|----------|
-| **STT arabe streaming** | (a) Web Speech API du navigateur · (b) Gemini (audio inline par tranches) · (c) Gemini **Live API** (audio continu, transcrit + traduit en un flux) · (d) STT dédié (Google Speech-to-Text streaming, Deepgram…) | **(a) par défaut**, **(b) en repli**, (c)/(d) documentés | (a) : latence minimale, **zéro bande passante audio** (crucial en mosquée), gratuit, aucune clé. Limite : surtout Chrome/Edge, sessions à relancer périodiquement (géré). (b) : marche partout où il y a un micro, mais +2–4 s et upload audio. (c) **Gemini Live** : le plus élégant sur le papier (1 flux audio → texte traduit), à tester en priorité **si (a) ne suffit pas** ; coûteux en connexions/bande passante et en quota. (d) : qualité de streaming supérieure mais clé + coût + intégration lourde. |
+| **STT arabe streaming** | (a) Web Speech API du navigateur · (b) Gemini (audio inline par tranches) · (c) Gemini **Live API** (audio continu, transcrit + traduit en un flux) · (d) STT dédié (Google Speech-to-Text streaming, Deepgram…) | **(a) par défaut**, **(c) v2.2 pour un direct « premium »**, **(b) en repli universel** | (a) : latence minimale, **zéro bande passante audio** (crucial en mosquée), gratuit, aucune clé. Limite : surtout Chrome/Edge, sessions à relancer périodiquement (géré). (b) : marche partout où il y a un micro, mais +2–4 s et upload audio. (c) **Gemini Live** : un seul flux audio PCM → texte traduit **en continu, sans découpage** ; c'est le mode Live du diffuseur (v2.2) — nécessite une clé Gemini et consomme de la bande passante (~16 ko/s). Repli automatique sur les autres modes si l'API échoue. (d) : qualité de streaming supérieure mais clé + coût + intégration lourde. |
 | **Traduction** | Google **Gemini API** (`gemini-2.5-flash` / `-pro`) · autre LLM · API de traduction classique | **Gemini `2.5-flash`** avec le prompt système spécialisé | Bon compromis latence/qualité/prix, sortie **JSON structurée** (`responseSchema`), suit un prompt de registre exigeant, gère la détection de citation coranique et la translittération. `-pro` disponible via `GEMINI_MODEL` pour plus de fidélité (plus lent). Une API de traduction classique ne tiendrait pas la terminologie islamique ni la glose. |
 | **TTS côté auditeur** | `speechSynthesis` du navigateur · TTS cloud | **`speechSynthesis` par défaut** | Gratuit, sur l'appareil, aucune bande passante, aucune donnée envoyée. Qualité et voix variables selon l'OS ; un TTS cloud (option future) donnerait une voix homogène au prix d'un flux audio par auditeur — contraire à la contrainte réseau. |
 | **Transport temps réel** | WebSocket · SSE · WebRTC | **WebSocket** | Bidirectionnel (contrôle + télémétrie diffuseur), fan-out simple, natif FastAPI/Starlette, traverse bien les proxys. WebRTC serait surdimensionné pour du texte. |
@@ -193,6 +209,11 @@ cp .env.example .env          # Windows : copy .env.example .env
 | `MAX_LISTENERS` | `1500` | Plafond d'auditeurs par session. |
 | `MAX_AUDIO_BYTES` | `2000000` | Taille max d'une tranche audio (chemin de repli). |
 | `ALLOW_NO_API_KEY` | `1` | `1` = autorise le démarrage sans clé (mode dégradé / test). |
+| `LIVE_ENABLED` | `1` | `0` = désactive la traduction en flux continu (bouton « Live » grisé). |
+| `LIVE_MODEL` | `gemini-3.5-live-translate-preview` | Modèle de la session Live. |
+| `LIVE_MAX_LANGS` | `4` | Nb max de sessions Live simultanées par session (une par langue). |
+| `LIVE_SETUP_TMO` | `12` | Secondes d'attente de `setupComplete` avant de déclarer l'échec. |
+| `LIVE_CONNECT_RETRIES` | `2` | Tentatives de reconnexion à l'API Live en cas d'échec réseau. |
 
 Les **langues cibles proposées** sont dans `backend/main.py` → `SUPPORTED_LANGUAGES` (ajustez selon votre communauté).
 
@@ -303,9 +324,13 @@ doit tourner sur **une seule instance persistante**, pas en serverless.
 |---|---|
 | Backend FastAPI + WebSocket (sessions, relais, endpoints) | [`backend/main.py`](backend/main.py) |
 | Pont API Gemini (traduction batch + STT de repli, cache, tolérance aux pannes) | [`backend/translator.py`](backend/translator.py) |
+| Session Gemini Live (traduction en flux continu : WS bidirectionnel, PCM, événements) | [`backend/live_translate.py`](backend/live_translate.py) |
+| Repli de détection de référence coranique (index hors-ligne) | [`backend/quran_index.py`](backend/quran_index.py) |
+| Corpus canonique des versets (traduction figée, jamais confiée au LLM) | [`backend/quran_verses.py`](backend/quran_verses.py) + [`backend/data/quran_verses.json`](backend/data/quran_verses.json) |
 | Frontend PWA en un seul fichier (Diffuseur, Auditeur, QR, langues, sous-titres, TTS) | [`frontend/index.html`](frontend/index.html) |
 | Service worker (coquille hors-ligne) + manifeste (servi par le backend) | [`frontend/sw.js`](frontend/sw.js) |
 | Prompt système de traduction spécialisé (contenu religieux) | [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) |
+| Pack « bénévole » (mini-PC / Raspberry Pi : Caddy + HTTPS auto + tunnel) | [`deploy/volunteer/`](deploy/volunteer/) |
 | Installation / configuration / lancement / déploiement / architecture / latence / échelle | ce fichier |
 
 ### Endpoints
@@ -323,8 +348,8 @@ doit tourner sur **une seule instance persistante**, pas en serverless.
 
 ### Protocole WebSocket (résumé)
 
-**Diffuseur → serveur** : `{type:"transcript", text, is_final, manual?}` · `{type:"audio", mime, data(base64)}` · `{type:"control", action:"pause|resume|stop"}` · `{type:"correct", seq, arabic}` · `{type:"config", glossary?, target_langs?}` · `{type:"level", value}` · `{type:"ping"}`
-**Serveur → diffuseur** : `{type:"hello", …, mosque_name, glossary, target_langs}` · `{type:"stats", listeners, languages}` · `{type:"monitor", seq, arabic, preview, is_quran, quran_ref, degraded, corrected}` · `{type:"stt", text}` · `{type:"config_ok", …}`
+**Diffuseur → serveur** : `{type:"transcript", text, is_final, manual?}` · `{type:"audio", mime, data(base64)}` · `{type:"control", action:"pause|resume|stop"}` · `{type:"correct", seq, arabic}` · `{type:"config", glossary?, target_langs?}` · `{type:"level", value}` · `{type:"live_start"}` · `{type:"live_stop"}` · `{type:"live_audio", data(base64: PCM 16 kHz mono)}` · `{type:"ping"}`
+**Serveur → diffuseur** : `{type:"hello", …, mosque_name, glossary, target_langs, live:{enabled, model, max_langs}}` · `{type:"stats", listeners, languages}` · `{type:"monitor", seq, arabic, preview, is_quran, quran_ref, degraded, corrected}` · `{type:"stt", text}` · `{type:"live", action:"started", started, failed, disabled}` · `{type:"live", action:"stopped"}` · `{type:"live", action:"error", lang, reason}` · `{type:"live", action:"closed", lang}` · `{type:"config_ok", …}`
 **Auditeur → serveur** : `{type:"set_lang", lang}` · `{type:"history"}` · `{type:"ping"}` — la reprise se fait via le query param `?since=<seq>` à la (re)connexion
 **Serveur → auditeur** : `{type:"hello", status, history[], resumed, mosque_name}` · `{type:"phrase", seq, ts, lang, text, arabic, is_quran, quran_ref, is_hadith, degraded, corrected}` · `{type:"interim", arabic}` · `{type:"session", status}` · `{type:"lang_changed", lang, history[]}` · `{type:"history", items[]}`
 
@@ -333,7 +358,7 @@ doit tourner sur **une seule instance persistante**, pas en serverless.
 ## 7. Limites connues / pistes
 
 - **Web Speech API** : surtout Chrome/Edge desktop et Android ; iOS Safari n'en a pas. Détecté automatiquement côté diffuseur → bascule sur « Audio → serveur » ou « Manuel ».
-- Le **chemin audio→serveur** segmente en tranches fixes de 4 s (pas de VAD) : découpe parfois une phrase. Convient au dépannage ; pour un usage soutenu, préférer la reconnaissance navigateur ou brancher Gemini Live.
+- Le **chemin audio→serveur** segmente en tranches fixes de 4 s (pas de VAD) : découpe parfois une phrase. Convient au dépannage ; pour un usage soutenu, préférer la reconnaissance navigateur ou le mode **« Traduction directe (Live) »** (v2.2).
 - **Détection des versets** : dépend du modèle ; `quran_ref` peut être `null` (jamais inventée). Afficher l'arabe original à côté (option activée par défaut) reste le garde-fou.
 - **TTS navigateur** : voix absente pour certaines langues selon l'appareil → repli automatique sur une voix proche, sinon sous-titres.
 - Sessions et historique **en mémoire** : un redémarrage backend termine les sessions en cours (voir Redis pour la persistance).

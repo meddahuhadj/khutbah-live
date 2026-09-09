@@ -1,0 +1,19 @@
+# Caddy reverse-proxy : HTTPS automatique + relais WebSocket.
+# Le nom de domaine est injecté par setup.sh (templating {{DOMAIN}}). 
+# Pour un test local sans domaine, utilisez http://localhost (voir README).
+
+http://{{DOMAIN}}:80 {
+    redir https://{{DOMAIN}}{uri} permanent
+}
+
+{{DOMAIN}} {
+    encode zstd gzip
+    reverse_proxy khutbah:8000 {
+        # Caddy gère le upgrade WebSocket par défaut ; on force simplement
+        # des buffers adaptés aux flux longs.
+        transports http {
+            keepalive 2m
+            dial_timeout 5s
+        }
+    }
+}

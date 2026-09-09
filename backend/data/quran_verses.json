@@ -1,0 +1,130 @@
+{
+  "meta": {
+    "format": "verset canonique -> {ar, translations:{lang:text}}",
+    "usage": "La traduction affichee pour un verset reconnu est figee dans ce fichier, jamais confiee a un LLM.",
+    "source_fr": "Traductions couramment publiees (ex. Muhammad Hamidullah pour le francais).",
+    "licensing_note": "Verifiez la licence des traductions que vous ajoutez. Ce fichier est un SEED minimal et extensible : ajoutez vos versets les plus cites pour couvrir davantage de khutbahs. Les champs absents sont simplement ignores (le LLM reste utilise pour les langues non couvertes)."
+  },
+  "verses": {
+    "1:1": {
+      "ar": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+      "translations": {
+        "fr": "Au nom d'Allah, le Tout Miséricordieux, le Très Miséricordieux."
+      }
+    },
+    "1:2": {
+      "ar": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
+      "translations": {
+        "fr": "Louange à Allah, Seigneur de l'univers."
+      }
+    },
+    "1:3": {
+      "ar": "الرَّحْمَٰنِ الرَّحِيمِ",
+      "translations": {
+        "fr": "Le Tout Miséricordieux, le Très Miséricordieux."
+      }
+    },
+    "1:4": {
+      "ar": "مَالِكِ يَوْمِ الدِّينِ",
+      "translations": {
+        "fr": "Maître du Jour de la rétribution."
+      }
+    },
+    "1:5": {
+      "ar": "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ",
+      "translations": {
+        "fr": "C'est Toi que nous adorons, et c'est Toi dont nous implorons secours."
+      }
+    },
+    "1:6": {
+      "ar": "اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ",
+      "translations": {
+        "fr": "Guide-nous dans le droit chemin."
+      }
+    },
+    "1:7": {
+      "ar": "صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ",
+      "translations": {
+        "fr": "Le chemin de ceux que Tu as comblés de faveurs, non pas de ceux qui ont encouru Ta colère, ni des égarés."
+      }
+    },
+    "2:255": {
+      "ar": "اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ۗ مَنْ ذَا الَّذِي يَشْفَعُ عِنْدَهُ إِلَّا بِإِذْنِهِ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَيْءٍ مِنْ عِلْمِهِ إِلَّا بِمَا شَاءَ ۚ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ ۖ وَلَا يَئُودُهُ حِفْظُهُمَا ۚ وَهُوَ الْعَلِيُّ الْعَظِيمُ",
+      "translations": {
+        "fr": "Allah ! Point de divinité à part Lui, le Vivant, Celui qui subsiste par Lui-même. Ni somnolence ni sommeil ne Le saisissent. À Lui appartient tout ce qui est dans les cieux et sur la terre. Qui peut intercéder auprès de Lui sans Sa permission ? Il sait ce qui est devant eux et derrière eux. Ils n'embrassent de Sa science que ce qu'Il veut. Son Trône s'étend sur les cieux et la terre, dont la garde ne Lui coûte nulle peine. Et Il est le Très Haut, le Très Grand."
+      }
+    },
+    "2:152": {
+      "ar": "فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ",
+      "translations": {
+        "fr": "Souvenez-vous de Moi donc. Je Me souviendrai de vous. Et soyez reconnaissants envers Moi, et ne soyez pas ingrats envers Moi."
+      }
+    },
+    "3:18": {
+      "ar": "شَهِدَ اللَّهُ أَنَّهُ لَا إِلَٰهَ إِلَّا هُوَ وَالْمَلَائِكَةُ وَأُولُو الْعِلْمِ قَائِمًا بِالْقِسْطِ ۚ لَا إِلَٰهَ إِلَّا هُوَ الْعَزِيزُ الْحَكِيمُ",
+      "translations": {
+        "fr": "Allah atteste, et aussi les Anges et les détenteurs de la science, qu'il n'y a point de divinité à part Lui, le Mainteneur de la justice. Point de divinité à part Lui, le Puissant, le Sage."
+      }
+    },
+    "14:7": {
+      "ar": "وَإِذْ تَأَذَّنَ رَبُّكُمْ لَئِنْ شَكَرْتُمْ لَأَزِيدَنَّكُمْ ۖ وَلَئِنْ كَفَرْتُمْ إِنَّ عَذَابِي لَشَدِيدٌ",
+      "translations": {
+        "fr": "Et lorsque votre Seigneur proclama : « Si vous êtes reconnaissants, Je vous accorderai davantage. Et si vous êtes ingrats, Mon châtiment est vraiment terrible. »"
+      }
+    },
+    "33:56": {
+      "ar": "إِنَّ اللَّهَ وَمَلَائِكَتَهُ يُصَلُّونَ عَلَى النَّبِيِّ ۚ يَا أَيُّهَا الَّذِينَ آمَنُوا صَلُّوا عَلَيْهِ وَسَلِّمُوا تَسْلِيمًا",
+      "translations": {
+        "fr": "Certes, Allah et Ses Anges prient sur le Prophète ; ô vous qui croyez, priez sur lui et adressez-lui vos salutations."
+      }
+    },
+    "4:136": {
+      "ar": "يَا أَيُّهَا الَّذِينَ آمَنُوا آمِنُوا بِاللَّهِ وَرَسُولِهِ وَالْكِتَابِ الَّذِي نَزَّلَ عَلَىٰ رَسُولِهِ وَالْكِتَابِ الَّذِي أَنْزَلَ مِنْ قَبْلُ",
+      "translations": {
+        "fr": "Ô les croyants ! Soyez fermes en votre foi en Allah, en Son messager, au Livre qu'Il a fait descendre sur Son messager, et au Livre qu'Il a fait descendre avant."
+      }
+    },
+    "112:1": {
+      "ar": "قُلْ هُوَ اللَّهُ أَحَدٌ",
+      "translations": {
+        "fr": "Dis : « Il est Allah, Unique."
+      }
+    },
+    "112:2": {
+      "ar": "اللَّهُ الصَّمَدُ",
+      "translations": {
+        "fr": "Allah, Le Seul à être imploré pour ce que nous désirons."
+      }
+    },
+    "112:3": {
+      "ar": "لَمْ يَلِدْ وَلَمْ يُولَدْ",
+      "translations": {
+        "fr": "Il n'a jamais engendré, n'a pas été engendré non plus."
+      }
+    },
+    "112:4": {
+      "ar": "وَلَمْ يَكُنْ لَهُ كُفُوًا أَحَدٌ",
+      "translations": {
+        "fr": "Et nul n'est égal à Lui."
+      }
+    },
+    "103:1": {
+      "ar": "وَالْعَصْرِ",
+      "translations": {
+        "fr": "Par le Temps !"
+      }
+    },
+    "103:2": {
+      "ar": "إِنَّ الْإِنْسَانَ لَفِي خُسْرٍ",
+      "translations": {
+        "fr": "L'homme est certes en perdition,"
+      }
+    },
+    "103:3": {
+      "ar": "إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّبْرِ",
+      "translations": {
+        "fr": "sauf ceux qui croient et accomplissent les bonnes œuvres, s'enjoignent mutuellement la vérité et s'enjoignent mutuellement l'endurance."
+      }
+    }
+  }
+}

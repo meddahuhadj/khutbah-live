@@ -1,6 +1,8 @@
 # Env
 backend/.env
 backend/.venv/
+deploy/volunteer/.env
+deploy/volunteer/Caddyfile
 **/__pycache__/
 *.pyc
 
@@ -13,6 +15,7 @@ node_modules/
 Thumbs.db
 .vscode/
 .idea/
+.kilo/
 *.log
 # Tests
 .pytest_cache/

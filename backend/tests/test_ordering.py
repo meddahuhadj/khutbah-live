@@ -48,14 +48,17 @@ def test_out_of_order_translation_is_reordered(app_client, monkeypatch):
 
 
 def test_backlog_drops_oldest(app_client):
-    room = main.Room("QUEUE1")
+    import main as _main
+    room = _main.Room("QUEUE1")
+    loop = asyncio.new_event_loop()
     room._seg_q = asyncio.Queue(maxsize=3)
-    room._worker = asyncio.get_event_loop().create_future()  # "en cours", ne draine jamais
+    room._worker = loop.create_future()  # "en cours", ne draine jamais
     for i in range(10):
         room.submit_segment(text=f"s{i}")
     assert room._seg_q.qsize() == 3
     assert room.dropped_segments == 7
     room._worker.cancel()
+    loop.close()
 
 
 def test_max_rooms_returns_503(app_client, monkeypatch):
