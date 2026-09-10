@@ -45,6 +45,8 @@ en synthèse vocale dans ses écouteurs. **Rien n'est diffusé en audio dans la 
 
 ### Outils opérateur (v1.5)
 
+> ⚠️ Cette version a été **remplacée en v2.3** par l'éditeur **Khotba** (zone de texte + bouton d'envoi), puis simplifiée (2026) en une **zone de saisie + bouton « Envoyer la Khotba »**. Description historique :
+
 - **Bibliothèque de phrases** (carte sur l'écran diffuseur en direct) : ~15 formules de khutbah pré-remplies en arabe (basmala, hamdala, salawât, « yâ ayyuhâ lladhîna âmanû », istighfâr de clôture, duʿâ' final…). **Un tap = envoi immédiat** aux fidèles (passe par le même chemin que la saisie manuelle, fonctionne dans tous les modes de captation, même en pause). L'opérateur ajoute / supprime ses propres phrases (mémorisées en local, `localStorage`), et peut rétablir la liste par défaut. Saisie RTL, ajout à la touche Entrée.
 
 ### Horloge, Tasbih, date hijri & PWA (v1.6)
@@ -62,7 +64,7 @@ en synthèse vocale dans ses écouteurs. **Rien n'est diffusé en audio dans la 
 - **Contexte non sécurisé détecté** : si l'appli est ouverte sur `http://192.168.x.x` (pas HTTPS), le micro est bloqué par le navigateur → les modes micro sont désactivés, message explicite (« diffusez depuis `http://localhost:8000` ou via un lien HTTPS »).
 - **Lien de partage utilisable** : quand l'imam est sur `localhost`, le serveur réécrit `join_url` **et le QR** avec son **IP LAN** (`socket`), pour que les téléphones du même Wi-Fi puissent rejoindre.
 - **Repli de référence coranique** : quand Gemini renvoie `is_quran=true` mais `quran_ref=null`, le backend cherche le segment dans un **index local du texte coranique** (`backend/data/quran_index.json`, ~711 Kio, sans diacritiques ; **100 % hors-ligne**). Gère les citations partielles et les plages `S:A1-A2` ; la référence retrouvée est marquée « ≈ » (à vérifier). Rebuild : `python scripts/build_quran_index.py`.
-- **Bibliothèque de phrases** (diffuseur) : ~15 formules de khutbah pré-remplies, envoi en un tap, ajout/suppression persistés localement.
+- **Bibliothèque de phrases** (diffuseur, v1.5) : ~15 formules de khutbah pré-remplies, envoi en un tap, ajout/suppression persistés localement — *remplacée par l'éditeur Khotba en v2.3, simplifié en 2026.*
 - **Suite de tests `pytest`** : `backend/tests/` (44 tests, Gemini mocké — aucun appel réseau). `pip install -r requirements-dev.txt && pytest`.
 
 ### Ordre strict des segments & durcissement mémoire (v1.9)
@@ -106,6 +108,19 @@ Le mode **« Traduction directe (Live) »** du diffuseur branche le micro sur **
 - **Configuration** (`backend/.env`) : `LIVE_ENABLED=1/0`, `LIVE_MODEL`, `LIVE_MAX_LANGS`, `LIVE_SETUP_TMO`, `LIVE_CONNECT_RETRIES`. Nécessite une clé Gemini (`GEMINI_API_KEY`/`GEMINI_API_KEYS`) ; sans clé le bouton « Live » est **grisé** côté navigateur.
 - **Contribution audio** : `frontend` capture le micro via `getUserMedia`, le convertit en **PCM 16 kHz mono 16-bit** (`AudioContext({sampleRate:16000})`), l'envoie par chunks (`live_audio`), démarre (`live_start`) et arrête (`live_stop`, pause/stop/reconnexion gérés).
 - **65 tests** (`backend/tests/`), dont `test_live_translate.py` (session Live mockée, gestion des événements serveur) et des tests bout-en-bout WebSocket (ouverture multi-langues, fan-out `live:true`, accumulation des fragments en phrase complète).
+
+### Direct fixe de la mosquée, Khotba lisible, veille WS (v2.3)
+
+Les fidèles **n'ont plus besoin de rescanner un QR chaque vendredi** : un seul lien/QR permanent suffit, enregistré une seule fois.
+
+- **Salle fixe** : `POST /api/session` avec `"fixed": true` réutilise la même salle (code `MAIN_ROOM_CODE`, défaut `JUMA5`) et la reset à chaque lancement. Le QR, le lien et le code sont donc **les mêmes chaque vendredi**. Un endpoint `GET /api/main` renvoie l'état courant de la salle fixe (`code`, `status`, `live`, `listeners`…).
+- **Écran accueil** : un bouton **🔴 En direct — Rejoindre le prêche** apparaît automatiquement lorsque le direct a commencé ; un tap suffit.
+- **Écran rejoindre** : la pastille d'état indique « En direct maintenant / En attente / Terminé » sans aucun code à saisir ; le détail du code (pour les techniciens) est replié sous `<details>`.
+- **Khotba** : la bibliothèque de phrases (v1.5) est remplacée par un **éditeur de texte simple** pour le prêche — une zone de saisie arabe où l'imam écrit/colle sa khutbah (enregistrée en `localStorage`, retrouvée après rechargement) et un bouton **Envoyer la Khotba** qui diffuse le texte aux fidèles. Utile en mode Manuel ou en complément de la reconnaissance vocale.
+- **Détection d'inactivité WebSocket** : si un auditeur oublie l'onglet ouvert ou éteint son écran, le serveur coupe la connexion après `WS_IDLE_TTL` secondes (défaut 120 s) — économie de mémoire et de ressources sans qu'aucun câble ne reste ouvert inutilement. Le client se réveille **automatiquement** lors du retour sur l'onglet, sans re-scanne du QR.
+- **Timeout de connexion (2 h)** : même une connexion *active* est fermée par le serveur après `SESSION_HARD_TTL` secondes (défaut 2 h) pour libérer la ressource — un téléphone laissé ouvert sur la page ne monopolise jamais le serveur plus longtemps. Le client se reconnecte automatiquement s'il est toujours utilisé.
+- **Variable d'environnement** : `MAIN_ROOM_CODE`, `MOSQUE_NAME`, `MOSQUE_GLOSSARY`, `MOSQUE_DEFAULT_LANGS`, `WS_IDLE_TTL`, `SESSION_HARD_TTL` (voir `backend/.env.example`).
+- **71 tests** (`backend/tests/`), dont `test_main_room.py` (salle fixe, reset, exemption de purge, `/api/main`, timeout idle WebSocket).
 
 ---
 
@@ -215,6 +230,12 @@ cp .env.example .env          # Windows : copy .env.example .env
 | `LIVE_MAX_LANGS` | `4` | Nb max de sessions Live simultanées par session (une par langue). |
 | `LIVE_SETUP_TMO` | `12` | Secondes d'attente de `setupComplete` avant de déclarer l'échec. |
 | `LIVE_CONNECT_RETRIES` | `2` | Tentatives de reconnexion à l'API Live en cas d'échec réseau. |
+| `MAIN_ROOM_CODE` | `JUMA5` | Code permanent de la salle fixe de la mosquée (revenu chaque vendredi). |
+| `MOSQUE_NAME` | *(vide)* | Nom affiché sur les écrans auditeur / accueil (badge 🕌). |
+| `MOSQUE_GLOSSARY` | *(vide)* | Glossaire injecté dans chaque session fixe (noms propres, termes locaux). |
+| `MOSQUE_DEFAULT_LANGS` | *(vide)* | Langues cibles par défaut pour la salle fixe, ex. `fr,en,nl`. |
+| `WS_IDLE_TTL` | `120` | Secondes d'inactivité avant de couper un WebSocket oisif (0 = jamais). |
+| `SESSION_HARD_TTL` | `7200` | Durée de vie max (s) d'une connexion, même active : fermeture automatique au-delà pour libérer le serveur (le client se reconnecte seul). |
 
 Les **langues cibles proposées** sont dans `backend/main.py` → `SUPPORTED_LANGUAGES` (ajustez selon votre communauté).
 
@@ -343,6 +364,7 @@ doit tourner sur **une seule instance persistante**, pas en serverless.
 | `GET` | `/api/session/{code}` | État d'une session |
 | `GET` | `/api/session/{code}/qr.png` | QR code (PNG) vers la page auditeur |
 | `GET` | `/api/languages` | Langues cibles supportées |
+| `GET` | `/api/main` | État de la salle fixe de la mosquée (`code`, `status`, `live`, `listeners`, `mosque_name`) |
 | `GET` | `/healthz` | Sonde (état, clé Gemini, modèle) |
 | `WS` | `/ws/broadcast/{code}?token=…` | Diffuseur (un seul par session) |
 | `WS` | `/ws/listen/{code}?lang=fr` | Auditeur (des centaines) |

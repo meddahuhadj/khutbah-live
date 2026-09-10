@@ -222,19 +222,11 @@
     font-size:.85rem; font-weight:650; flex:0 0 auto}
   .back-btn span[aria-hidden]{font-size:1.3em; line-height:1; margin-top:-2px}
   html[dir="rtl"] .back-btn span[aria-hidden]{transform:scaleX(-1)}
-  /* Bibliothèque de phrases (diffuseur) */
-  .phrase-lib{display:flex; flex-wrap:wrap; gap:8px}
-  .phrase-lib .pl-item{display:inline-flex; align-items:center; gap:2px; border:1px solid var(--line);
-    background:var(--card2); border-radius:12px; overflow:hidden; max-width:100%}
-  .phrase-lib .pl-send{background:transparent; border:0; color:var(--fg); direction:rtl;
-    font-family:"Noto Naskh Arabic","Noto Sans Arabic",serif; font-size:1.02em; line-height:1.7;
-    padding:8px 12px; cursor:pointer; min-height:0; text-align:right; white-space:normal}
-  .phrase-lib .pl-send:hover{background:var(--chip)}
-  .phrase-lib .pl-del{background:transparent; border:0; border-left:1px solid var(--line);
-    color:var(--muted); font-size:1rem; line-height:1; padding:0 10px; align-self:stretch;
-    min-height:0; border-radius:0}
-  .phrase-lib .pl-del:hover{color:var(--danger); background:var(--chip)}
-  html[dir="rtl"] .phrase-lib .pl-del{border-left:0; border-right:1px solid var(--line)}
+
+  /* Bouton « en direct » de l'accueil */
+  .live-now{border:1px solid var(--accent); background:color-mix(in srgb, var(--accent) 22%, transparent)}
+  .live-now .dot{animation:blink 1.3s linear infinite}
+  @keyframes blink{50%{opacity:.25}}
 
   /* ===== Horloge temps réel (barre du haut) ===== */
   .top-clock{display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -513,6 +505,9 @@
         <button class="big" id="btnGoListen" data-i18n="home_listen">J'écoute (fidèle)</button>
         <button class="big secondary" id="btnGoBroadcast" data-i18n="home_broadcast">Je diffuse (imam / opérateur)</button>
       </div>
+      <button class="big hidden" id="btnLiveNow" style="margin-top:10px">
+        <span class="dot" aria-hidden="true"></span>&nbsp;<span data-i18n="home_live_on">En direct — Rejoindre le prêche</span>
+      </button>
       <button class="big ghost" id="btnQuranHome" style="margin-top:10px" data-i18n="home_quran">📖 Écouter le Coran (récitation)</button>
       <button class="big ghost" id="btnTasbihHome" style="margin-top:8px" data-i18n="home_tasbih">📿 Tasbih — compteur de dhikr</button>
       <button class="big ghost" id="btnPrayerHome" style="margin-top:8px" data-i18n="home_prayer">🕌 Heures de prière</button>
@@ -661,17 +656,16 @@
         border:1px solid var(--warn); color:var(--warn); font-size:.82rem; font-weight:600" data-i18n="bc_insecure">
         Micro bloqué : cette page n'est pas en HTTPS. Pour diffuser la voix de l'imam, ouvrez l'application
         sur http://localhost:8000 (sur le PC serveur), ou via un lien HTTPS (tunnel). Le mode Manuel et la
-        bibliothèque de phrases restent disponibles.</p>
+        Khotba restent disponibles.</p>
     </div>
 
     <div id="bc-live" class="hidden">
       <div class="card center">
         <h3 id="bc-mosqueName" style="color:var(--fg); font-weight:750"></h3>
-        <h3 data-i18n="bc_code">Code de session</h3>
-        <div class="ruh" aria-hidden="true">۞</div>
-        <div class="code-badge" id="bc-code">------</div>
         <img class="qr" id="bc-qr" alt="QR code" />
         <p id="bc-joinUrl" class="muted" style="font-size:.8rem; word-break:break-all; margin:6px 0 0"></p>
+        <p id="bc-fixedNote" class="muted" style="font-size:.78rem; margin:8px 0 0; color:var(--accent3); font-weight:650"
+           data-i18n="bc_fixed_note">Ce lien et ce QR resteront valables pour les vendredis suivants — les fidèles n'ont besoin de les enregistrer qu'une seule fois.</p>
         <p id="bc-shareWarn" class="hidden" style="font-size:.78rem; color:var(--warn); font-weight:650; margin:8px 0 0"
            data-i18n="bc_share_warn">Ce lien ne marche que sur cet ordinateur. Ouvrez l'application via l'adresse réseau du PC (http://192.168.x.x:8000) ou configurez PUBLIC_BASE_URL / un tunnel pour les téléphones.</p>
         <div class="row" style="margin-top:8px">
@@ -743,14 +737,13 @@
       </div>
 
       <div class="card">
-        <h3 data-i18n="bc_lib">Bibliothèque de phrases</h3>
-        <p class="muted" style="font-size:.75rem; margin:0 0 8px" data-i18n="bc_lib_hint">Touchez une phrase pour l'envoyer immédiatement aux fidèles (fonctionne dans tous les modes).</p>
-        <div id="bc-lib" class="phrase-lib"></div>
-        <div class="row" style="margin-top:10px">
-          <input id="bc-libNew" dir="rtl" placeholder="…" data-i18n-aria="bc_lib_add" aria-label="Nouvelle phrase" style="flex:1 1 55%" />
-          <button class="secondary" id="btnLibAdd" style="flex:0 0 auto" data-i18n="bc_lib_addbtn">＋ Ajouter</button>
-        </div>
-        <button class="ghost" id="btnLibReset" style="margin-top:8px; padding:8px 12px; font-size:.8rem" data-i18n="bc_lib_reset">Rétablir la liste par défaut</button>
+        <h3 data-i18n="bc_kh">Khotba — texte du prêche</h3>
+        <p class="muted" style="font-size:.75rem; margin:0 0 8px" data-i18n="bc_kh_hint">Écrivez ou collez votre Khotba ici, puis envoyez-la aux fidèles.</p>
+        <textarea id="bc-kh-edit" dir="rtl" spellcheck="false" rows="8"
+          placeholder="بسم الله الرحمن الرحيم
+الحمد لله رب العالمين..."
+          style="width:100%; padding:12px; border-radius:12px; background:var(--card2); color:var(--fg); border:1px solid var(--line); font-family:'Noto Naskh Arabic','Noto Sans Arabic',serif; line-height:2"></textarea>
+        <button class="big" id="btnKhSend" style="margin-top:10px" data-i18n="bc_kh_sendall">Envoyer la Khotba</button>
       </div>
     </div>
   </section>
@@ -760,10 +753,15 @@
     <div class="card islamic-pattern">
       <div class="islamic-ornament">✦ ✦ ✦</div>
       <div class="ruh small" aria-hidden="true">۞</div>
-      <h2 data-i18n="join_h">Rejoindre une session</h2>
+      <h2 data-i18n="join_h">Rejoindre le prêche</h2>
       <div id="join-mosque" class="pill hidden" style="margin-bottom:8px"></div>
-      <label data-i18n="join_code">Code de session</label>
-      <input id="join-code" inputmode="latin" autocapitalize="characters" maxlength="8" placeholder="ABC123" />
+      <p id="join-status" class="pill center" role="status" aria-live="polite"
+         style="margin:0 0 12px; font-weight:650" data-i18n="join_waiting">En attente — le prêche commence bientôt</p>
+      <details id="join-other" style="margin-bottom:10px">
+        <summary data-i18n="join_other" style="font-size:.82rem">Une autre session ? (code)</summary>
+        <label data-i18n="join_code" style="margin-top:8px">Code de session</label>
+        <input id="join-code" inputmode="latin" autocapitalize="characters" maxlength="8" placeholder="ABC123" />
+      </details>
       <label data-i18n="join_lang">Ma langue</label>
       <select id="join-lang"></select>
       <label data-i18n="join_recv">Recevoir la traduction en</label>
@@ -881,9 +879,9 @@ const I18N = {
     home_p:"Aucune installation, aucun compte. Choisissez votre rôle pour suivre le prêche en direct.",
     home_listen:"J'écoute (fidèle)",home_broadcast:"Je diffuse (imam / opérateur)",
     home_note:"Chacun reçoit la traduction en privé, dans ses écouteurs. Rien n'est diffusé en audio dans la salle. Barakallahu fikum.",
-    bc_setup_h:"Démarrer une session de khutbah",bc_setup_p:"Un code + un QR code seront générés pour que les fidèles puissent suivre le prêche.",
-    bc_create:"Créer la session",bc_nokey:"Clé Gemini absente : mode dégradé (arabe diffusé sans traduction).",
-    bc_code:"Code de session",bc_copylink:"Copier le lien",bc_share:"Partager",bc_listeners:"auditeurs",
+    bc_setup_h:"Démarrer une session de khutbah",bc_setup_p:"Le lien et le QR code sont fixes : les fidèles ne les enregistrent qu'une seule fois — ils resteront valables tous les vendredis.",
+    bc_create:"Démarrer le direct du vendredi",bc_nokey:"Clé Gemini absente : mode dégradé (arabe diffusé sans traduction).",
+    bc_copylink:"Copier le lien",bc_share:"Partager",bc_listeners:"auditeurs",
     bc_mode:"Mode de captation",mode_speech:"Reconnaissance navigateur",mode_audio:"Audio → serveur",mode_live:"Traduction directe (Live)",mode_manual:"Manuel",
     bc_srlang:"Langue parlée par l'imam",bc_level:"Niveau sonore du micro",
     bc_start:"Démarrer",bc_pause:"Pause",bc_stop:"Arrêter",bc_resume:"Reprendre",
@@ -897,9 +895,9 @@ const I18N = {
     live_failed:"Sessions directes échouées : ",
     live_closed:"Session directe arrêtée par le serveur : ",
     live_error:"Erreur de session directe : ",
-    join_h:"Rejoindre une session",join_code:"Code de session",join_lang:"Ma langue",join_recv:"Recevoir la traduction en",
+    join_h:"Rejoindre le prêche",join_code:"Code de session",join_lang:"Ma langue",join_recv:"Recevoir la traduction en",
     recv_text:"Sous-titres",recv_voice:"Voix (TTS)",recv_both:"Les deux",join_go:"Rejoindre",
-    join_tip:"Astuce : scannez le QR code affiché à l'entrée pour rejoindre en 1 tap.",
+    join_tip:"Installez l'application une fois : elle retrouvera automatiquement le prêche de la mosquée chaque vendredi.",
     join_err_code:"Code invalide.",join_err_notfound:"Session introuvable ou terminée.",join_err_full:"Session complète.",
     ls_history:"Historique",set_h:"Réglages",set_lang:"Langue",set_recv:"Réception",set_size:"Taille du texte",
     set_rate:"Vitesse de la voix",set_voice:"Voix",set_showar:"Afficher aussi l'arabe original",
@@ -913,9 +911,9 @@ const I18N = {
     home_p:"No install, no account. Choose your role to follow the sermon in real time.",home_listen:"I listen (attendee)",
     home_broadcast:"I broadcast (imam / operator)",
     home_note:"Everyone gets the translation privately, in their earphones. Nothing is played aloud in the room. Barakallahu feekum.",
-    bc_setup_h:"Start a khutbah session",bc_setup_p:"A code + QR code will be generated so attendees can follow the sermon.",
-    bc_create:"Create session",bc_nokey:"No Gemini key: degraded mode (Arabic relayed without translation).",
-    bc_code:"Session code",bc_copylink:"Copy link",bc_share:"Share",bc_listeners:"listeners",
+    bc_setup_h:"Start a khutbah session",bc_setup_p:"The link and QR code are permanent: attendees register them only once — they stay valid every Friday.",
+    bc_create:"Start this Friday's broadcast",bc_nokey:"No Gemini key: degraded mode (Arabic relayed without translation).",
+    bc_copylink:"Copy link",bc_share:"Share",bc_listeners:"listeners",
     bc_mode:"Capture mode",mode_speech:"Browser recognition",mode_audio:"Audio → server",mode_live:"Direct translation (Live)",mode_manual:"Manual",
     bc_srlang:"Language spoken by the imam",bc_level:"Microphone level",
     bc_start:"Start",bc_pause:"Pause",bc_stop:"Stop",bc_resume:"Resume",
@@ -928,9 +926,9 @@ const I18N = {
     live_failed:"Direct sessions failed: ",
     live_closed:"Direct session stopped by the server: ",
     live_error:"Direct session error: ",
-    join_h:"Join a session",join_code:"Session code",join_lang:"My language",join_recv:"Receive the translation as",
+    join_h:"Join the khutbah",join_code:"Session code",join_lang:"My language",join_recv:"Receive the translation as",
     recv_text:"Subtitles",recv_voice:"Voice (TTS)",recv_both:"Both",join_go:"Join",
-    join_tip:"Tip: scan the QR code at the entrance to join in one tap.",
+    join_tip:"Install the app once: it will automatically find the mosque's khutbah every Friday.",
     join_err_code:"Invalid code.",join_err_notfound:"Session not found or ended.",join_err_full:"Session full.",
     ls_history:"History",set_h:"Settings",set_lang:"Language",set_recv:"Reception",set_size:"Text size",
     set_rate:"Voice speed",set_voice:"Voice",set_showar:"Also show original Arabic",
@@ -944,9 +942,9 @@ const I18N = {
     home_p:"Geen installatie, geen account. Kies je rol om de preek in real-time te volgen.",home_listen:"Ik luister (aanwezige)",
     home_broadcast:"Ik zend uit (imam / operator)",
     home_note:"Iedereen krijgt de vertaling privé, in de oortjes. Er wordt niets hoorbaar afgespeeld in de zaal. Barakallahu feekum.",
-    bc_setup_h:"Een khutbah-sessie starten",bc_setup_p:"Er worden een code + QR-code gegenereerd zodat de aanwezigen de preek kunnen volgen.",
-    bc_create:"Sessie aanmaken",bc_nokey:"Geen Gemini-sleutel: beperkte modus (Arabisch zonder vertaling).",
-    bc_code:"Sessiecode",bc_copylink:"Link kopiëren",bc_share:"Delen",bc_listeners:"luisteraars",
+    bc_setup_h:"Een khutbah-sessie starten",bc_setup_p:"De link en QR-code zijn vast: deelnemers registreren ze één keer — ze blijven elke vrijdag geldig.",
+    bc_create:"De live-uitzending van vrijdag starten",bc_nokey:"Geen Gemini-sleutel: beperkte modus (Arabisch zonder vertaling).",
+    bc_copylink:"Link kopiëren",bc_share:"Delen",bc_listeners:"luisteraars",
     bc_mode:"Opnamemodus",mode_speech:"Browserherkenning",mode_audio:"Audio → server",mode_live:"Directe vertaling (Live)",mode_manual:"Handmatig",
     bc_srlang:"Taal gesproken door de imam",bc_level:"Microfoonniveau",
     bc_start:"Starten",bc_pause:"Pauze",bc_stop:"Stoppen",bc_resume:"Hervatten",
@@ -959,9 +957,9 @@ const I18N = {
     live_failed:"Directe sessies mislukt: ",
     live_closed:"Directe sessie gestopt door de server: ",
     live_error:"Directe sessie-fout: ",
-    join_h:"Deelnemen aan een sessie",join_code:"Sessiecode",join_lang:"Mijn taal",join_recv:"Ontvang de vertaling als",
+    join_h:"Deelnemen aan de khutbah",join_code:"Sessiecode",join_lang:"Mijn taal",join_recv:"Ontvang de vertaling als",
     recv_text:"Ondertitels",recv_voice:"Stem (TTS)",recv_both:"Beide",join_go:"Deelnemen",
-    join_tip:"Tip: scan de QR-code bij de ingang om met één tik deel te nemen.",
+    join_tip:"Installeer de app één keer: ze vindt automatisch de preek van de moskee elke vrijdag.",
     join_err_code:"Ongeldige code.",join_err_notfound:"Sessie niet gevonden of beëindigd.",join_err_full:"Sessie vol.",
     ls_history:"Geschiedenis",set_h:"Instellingen",set_lang:"Taal",set_recv:"Ontvangst",set_size:"Tekstgrootte",
     set_rate:"Spreeksnelheid",set_voice:"Stem",set_showar:"Toon ook het originele Arabisch",
@@ -975,9 +973,9 @@ const I18N = {
     home_p:"بدون تثبيت وبدون حساب. اختر دورك لمتابعة الخطبة مباشرة.",home_listen:"أنا مستمع (مصلٍّ)",
     home_broadcast:"أنا أبثّ (الإمام / المشغّل)",
     home_note:"كل شخص يتلقّى الترجمة بشكل خاص في سمّاعته. لا يُبثّ أي صوت في القاعة. بارك الله فيكم.",
-    bc_setup_h:"بدء جلسة خطبة",bc_setup_p:"سيتم إنشاء رمز ورمز QR ليتمكّن المصلّون من متابعة الخطبة.",
-    bc_create:"إنشاء الجلسة",bc_nokey:"لا يوجد مفتاح Gemini: وضع محدود (بثّ العربية بدون ترجمة).",
-    bc_code:"رمز الجلسة",bc_copylink:"نسخ الرابط",bc_share:"مشاركة",bc_listeners:"مستمعون",
+    bc_setup_h:"بدء جلسة خطبة",bc_setup_p:"الرابط ورمز QR ثابتان: يسجّلهما المصلّون مرة واحدة فقط — يبقيان صالحَين كل جمعة.",
+    bc_create:"بدء بثّ الجمعة",bc_nokey:"لا يوجد مفتاح Gemini: وضع محدود (بثّ العربية بدون ترجمة).",
+    bc_copylink:"نسخ الرابط",bc_share:"مشاركة",bc_listeners:"مستمعون",
     bc_mode:"وضع الالتقاط",mode_speech:"تعرّف المتصفّح",mode_audio:"الصوت → الخادم",mode_live:"ترجمة مباشرة (Live)",mode_manual:"يدوي",
     bc_srlang:"اللغة التي يتحدّث بها الإمام",bc_level:"مستوى صوت الميكروفون",
     bc_start:"ابدأ",bc_pause:"إيقاف مؤقّت",bc_stop:"إيقاف",bc_resume:"استئناف",
@@ -990,9 +988,9 @@ const I18N = {
     live_failed:"فشلت الجلسات المباشرة: ",
     live_closed:"أوقفت الخادم الجلسة المباشرة: ",
     live_error:"خطأ في الجلسة المباشرة: ",
-    join_h:"الانضمام إلى جلسة",join_code:"رمز الجلسة",join_lang:"لغتي",join_recv:"استقبال الترجمة على شكل",
+    join_h:"الانضمام إلى الخطبة",join_code:"رمز الجلسة",join_lang:"لغتي",join_recv:"استقبال الترجمة على شكل",
     recv_text:"ترجمة نصّية",recv_voice:"صوت (TTS)",recv_both:"الاثنان",join_go:"انضمام",
-    join_tip:"نصيحة: امسح رمز QR عند المدخل للانضمام بلمسة واحدة.",
+    join_tip:"ثبِّت التطبيق مرة واحدة: سيجد خطبة المسجد تلقائيًا كل جمعة.",
     join_err_code:"رمز غير صالح.",join_err_notfound:"الجلسة غير موجودة أو انتهت.",join_err_full:"الجلسة ممتلئة.",
     ls_history:"السجلّ",set_h:"الإعدادات",set_lang:"اللغة",set_recv:"الاستقبال",set_size:"حجم النص",
     set_rate:"سرعة الصوت",set_voice:"الصوت",set_showar:"إظهار النص العربي الأصلي أيضًا",
@@ -1107,28 +1105,48 @@ Object.assign(I18N.ar,{
   prayer_fajr:"الفجر", prayer_sunrise:"الشروق", prayer_dhuhr:"الظهر",
   prayer_asr:"العصر", prayer_maghrib:"المغرب", prayer_isha:"العشاء"});
 
-/* --- Bibliothèque de phrases (diffuseur, v1.5) --- */
-Object.assign(I18N.fr,{ bc_lib:"Bibliothèque de phrases",
-  bc_lib_hint:"Touchez une phrase pour l'envoyer immédiatement aux fidèles (fonctionne dans tous les modes).",
-  bc_lib_add:"Nouvelle phrase en arabe", bc_lib_addbtn:"＋ Ajouter", bc_lib_reset:"Rétablir la liste par défaut",
-  bc_lib_send:"Envoyer cette phrase", bc_lib_sent:"Phrase envoyée", bc_lib_nosession:"Démarrez d'abord la session." });
-Object.assign(I18N.en,{ bc_lib:"Phrase library",
-  bc_lib_hint:"Tap a phrase to send it to attendees right away (works in every mode).",
-  bc_lib_add:"New phrase in Arabic", bc_lib_addbtn:"＋ Add", bc_lib_reset:"Restore default list",
-  bc_lib_send:"Send this phrase", bc_lib_sent:"Phrase sent", bc_lib_nosession:"Start the session first." });
-Object.assign(I18N.nl,{ bc_lib:"Zinnenbibliotheek",
-  bc_lib_hint:"Tik op een zin om die meteen naar de aanwezigen te sturen (werkt in elke modus).",
-  bc_lib_add:"Nieuwe zin in het Arabisch", bc_lib_addbtn:"＋ Toevoegen", bc_lib_reset:"Standaardlijst herstellen",
-  bc_lib_send:"Deze zin sturen", bc_lib_sent:"Zin verzonden", bc_lib_nosession:"Start eerst de sessie." });
-Object.assign(I18N.ar,{ bc_lib:"مكتبة العبارات",
-  bc_lib_hint:"اضغط على عبارة لإرسالها فورًا إلى المصلّين (تعمل في كل الأوضاع).",
-  bc_lib_add:"عبارة جديدة بالعربية", bc_lib_addbtn:"＋ إضافة", bc_lib_reset:"استعادة القائمة الافتراضية",
-  bc_lib_send:"إرسال هذه العبارة", bc_lib_sent:"تمّ إرسال العبارة", bc_lib_nosession:"ابدأ الجلسة أولًا." });
+/* --- Khotba : éditeur de texte du prêche + direct fixe (v2.3) --- */
+Object.assign(I18N.fr,{ bc_kh:"Khotba — texte du prêche",
+  bc_kh_hint:"Écrivez ou collez votre Khotba ici, puis envoyez-la aux fidèles.",
+  bc_kh_sendall:"Envoyer la Khotba",
+  bc_kh_sent:"Khotba envoyée", bc_kh_nosession:"Démarrez d'abord le direct.",
+  bc_fixed_note:"Ce lien et ce QR resteront valables pour les vendredis suivants — les fidèles n'ont besoin de les enregistrer qu'une seule fois.",
+  home_live_on:"En direct — Rejoindre le prêche",
+  join_live:"En direct maintenant", join_waiting:"En attente — le prêche commence bientôt",
+  join_ended:"Le prêche de ce vendredi est terminé", join_other:"Une autre session ? (code)",
+  conn_sleep:"En veille — reprendra automatiquement au retour sur l'onglet." });
+Object.assign(I18N.en,{ bc_kh:"Khutbah — sermon text",
+  bc_kh_hint:"Write or paste your khutbah here, then send it to attendees.",
+  bc_kh_sendall:"Send the khutbah",
+  bc_kh_sent:"Khutbah sent", bc_kh_nosession:"Start the broadcast first.",
+  bc_fixed_note:"This link and QR will remain valid for the coming Fridays — attendees register them only once.",
+  home_live_on:"Live now — join the khutbah",
+  join_live:"Live now", join_waiting:"Waiting — the khutbah starts soon",
+  join_ended:"This Friday's khutbah has ended", join_other:"Another session? (code)",
+  conn_sleep:"Asleep — will resume automatically when the tab is visible again." });
+Object.assign(I18N.nl,{ bc_kh:"Khutbah — preektekst",
+  bc_kh_hint:"Schrijf of plak hier je khutbah en stuur ze vervolgens naar de aanwezigen.",
+  bc_kh_sendall:"Khutbah versturen",
+  bc_kh_sent:"Khutbah verstuurd", bc_kh_nosession:"Start eerst de uitzending.",
+  bc_fixed_note:"Deze link en QR blijven geldig voor de komende vrijdagen — deelnemers registreren ze slechts één keer.",
+  home_live_on:"Live — neem deel aan de khutbah",
+  join_live:"Live nu", join_waiting:"Wachten — de khutbah begint binnenkort",
+  join_ended:"De khutbah van deze vrijdag is beëindigd", join_other:"Een andere sessie? (code)",
+  conn_sleep:"In slaap — hervat automatisch wanneer het tabblad weer zichtbaar is." });
+Object.assign(I18N.ar,{ bc_kh:"الخطبة — نصّ",
+  bc_kh_hint:"اكتب أو الصق خطبتك هنا، ثم أرسِلها إلى المصلّين.",
+  bc_kh_sendall:"إرسال الخطبة",
+  bc_kh_sent:"تمّ إرسال الخطبة", bc_kh_nosession:"ابدأ البثّ أولًا.",
+  bc_fixed_note:"سيبقى هذا الرابط ورمز QR صالحَين للجمع القادمة — يسجّلهما المصلّون مرة واحدة فقط.",
+  home_live_on:"مباشر الآن — انضمّ إلى الخطبة",
+  join_live:"مباشر الآن", join_waiting:"في الانتظار — الخطبة تبدأ قريبًا",
+  join_ended:"انتهت خطبة هذا الجمعة", join_other:"جلسة أخرى؟ (الرمز)",
+  conn_sleep:"في وضع السكون — ستستأنف تلقائيًا عند العودة إلى الصفحة." });
 
 /* --- États de la reconnaissance vocale (diffuseur, v1.7) --- */
 Object.assign(I18N.fr,{
   sr_st_wait:"Écoute active — parlez pour diffuser…", sr_st_ok:"Voix captée — diffusion en cours",
-  sr_st_manual:"Mode manuel : tapez ou utilisez la bibliothèque de phrases.",
+  sr_st_manual:"Mode manuel : tapez le texte ou utilisez la zone Khotba.",
   sr_st_paused:"En pause.", sr_st_nospeech:"Aucune parole détectée.",
   sr_network:"La reconnaissance vocale a besoin d'Internet et n'y arrive pas. Passez en « Audio → serveur » ou « Manuel ».",
   sr_lang:"Cette langue n'est pas prise en charge par la reconnaissance du navigateur. Essayez une autre variante, « Audio → serveur » ou « Manuel ».",
@@ -1137,7 +1155,7 @@ Object.assign(I18N.fr,{
   sr_nospeech:"Rien n'est capté depuis 9 s. Vérifiez le micro, ou passez en « Audio → serveur » / « Manuel »." });
 Object.assign(I18N.en,{
   sr_st_wait:"Listening — speak to broadcast…", sr_st_ok:"Voice captured — broadcasting",
-  sr_st_manual:"Manual mode: type or use the phrase library.",
+  sr_st_manual:"Manual mode: type the text or use the khutbah box.",
   sr_st_paused:"Paused.", sr_st_nospeech:"No speech detected.",
   sr_network:"Browser speech recognition needs the internet and can't reach it. Switch to “Audio → server” or “Manual”.",
   sr_lang:"This language isn't supported by browser recognition. Try another variant, “Audio → server” or “Manual”.",
@@ -1146,7 +1164,7 @@ Object.assign(I18N.en,{
   sr_nospeech:"Nothing captured for 9 s. Check the mic, or switch to “Audio → server” / “Manual”." });
 Object.assign(I18N.nl,{
   sr_st_wait:"Luisteren — spreek om uit te zenden…", sr_st_ok:"Stem opgevangen — uitzending bezig",
-  sr_st_manual:"Handmatige modus: typ of gebruik de zinnenbibliotheek.",
+  sr_st_manual:"Handmatige modus: typ de tekst of gebruik het khutbah-veld.",
   sr_st_paused:"Gepauzeerd.", sr_st_nospeech:"Geen spraak gedetecteerd.",
   sr_network:"Browserspraakherkenning heeft internet nodig en kan er niet bij. Schakel naar “Audio → server” of “Handmatig”.",
   sr_lang:"Deze taal wordt niet ondersteund door browserherkenning. Probeer een andere variant, “Audio → server” of “Handmatig”.",
@@ -1155,7 +1173,7 @@ Object.assign(I18N.nl,{
   sr_nospeech:"9 s niets opgevangen. Controleer de microfoon of schakel naar “Audio → server” / “Handmatig”." });
 Object.assign(I18N.ar,{
   sr_st_wait:"جارٍ الاستماع — تكلّم للبثّ…", sr_st_ok:"تمّ التقاط الصوت — البثّ جارٍ",
-  sr_st_manual:"الوضع اليدوي: اكتب أو استخدم مكتبة العبارات.",
+  sr_st_manual:"الوضع اليدوي: اكتب أو استخدم حقل الخطبة.",
   sr_st_paused:"متوقّف مؤقتًا.", sr_st_nospeech:"لم يُكتشف أي كلام.",
   sr_network:"يحتاج تعرّف الكلام في المتصفّح إلى الإنترنت ولا يصل إليه. انتقل إلى «الصوت → الخادم» أو «يدوي».",
   sr_lang:"هذه اللغة غير مدعومة في تعرّف المتصفّح. جرّب لهجة أخرى، أو «الصوت → الخادم» أو «يدوي».",
@@ -1166,16 +1184,16 @@ Object.assign(I18N.ar,{
 /* --- Partage du lien + contexte non sécurisé (v1.7) --- */
 Object.assign(I18N.fr,{
   bc_share_warn:"⚠️ Ce lien ne fonctionne que sur cet ordinateur. Pour les téléphones : ouvrez l'application via l'adresse réseau du PC (ex. http://192.168.x.x:8000), ou lancez un tunnel / renseignez PUBLIC_BASE_URL.",
-  bc_insecure:"⚠️ Micro bloqué : cette page n'est pas en HTTPS. Pour diffuser la VOIX de l'imam, ouvrez l'application sur http://localhost:8000 (sur le PC serveur) ou via un lien HTTPS (tunnel type ngrok). Ici, seuls le mode Manuel et la bibliothèque de phrases fonctionnent — c'est pourquoi seul le texte écrit est traduit." });
+  bc_insecure:"⚠️ Micro bloqué : cette page n'est pas en HTTPS. Pour diffuser la VOIX de l'imam, ouvrez l'application sur http://localhost:8000 (sur le PC serveur) ou via un lien HTTPS (tunnel type ngrok). Ici seuls le mode Manuel et la Khotba fonctionnent — c'est pourquoi seul le texte écrit est traduit." });
 Object.assign(I18N.en,{
   bc_share_warn:"⚠️ This link only works on this computer. For phones: open the app via the PC's network address (e.g. http://192.168.x.x:8000), or run a tunnel / set PUBLIC_BASE_URL.",
-  bc_insecure:"⚠️ Microphone blocked: this page isn't served over HTTPS. To broadcast the imam's VOICE, open the app at http://localhost:8000 (on the server PC) or via an HTTPS link (a tunnel such as ngrok). Here only Manual mode and the phrase library work — that's why only typed text gets translated." });
+  bc_insecure:"⚠️ Microphone blocked: this page isn't served over HTTPS. To broadcast the imam's VOICE, open the app at http://localhost:8000 (on the server PC) or via an HTTPS link (a tunnel such as ngrok). Here only Manual mode and the khutbah text work — that's why only typed text gets translated." });
 Object.assign(I18N.nl,{
   bc_share_warn:"⚠️ Deze link werkt alleen op deze computer. Voor telefoons: open de app via het netwerkadres van de pc (bv. http://192.168.x.x:8000), of gebruik een tunnel / stel PUBLIC_BASE_URL in.",
-  bc_insecure:"⚠️ Microfoon geblokkeerd: deze pagina wordt niet via HTTPS geserveerd. Om de STEM van de imam uit te zenden, open de app op http://localhost:8000 (op de server-pc) of via een HTTPS-link (een tunnel zoals ngrok). Hier werken alleen de handmatige modus en de zinnenbibliotheek — daarom wordt alleen getypte tekst vertaald." });
+  bc_insecure:"⚠️ Microfoon geblokkeerd: deze pagina wordt niet via HTTPS geserveerd. Om de STEM van de imam uit te zenden, open de app op http://localhost:8000 (op de server-pc) of via een HTTPS-link (een tunnel zoals ngrok). Hier werken alleen de handmatige modus en de Khutbah — daarom wordt alleen getypte tekst vertaald." });
 Object.assign(I18N.ar,{
   bc_share_warn:"⚠️ هذا الرابط يعمل على هذا الحاسوب فقط. للهواتف: افتح التطبيق عبر عنوان الشبكة للحاسوب (مثل http://192.168.x.x:8000)، أو شغّل نفقًا / اضبط PUBLIC_BASE_URL.",
-  bc_insecure:"⚠️ الميكروفون محظور: هذه الصفحة ليست على HTTPS. لبثّ صوت الإمام، افتح التطبيق على http://localhost:8000 (على حاسوب الخادم) أو عبر رابط HTTPS (نفق مثل ngrok). هنا يعمل الوضع اليدوي ومكتبة العبارات فقط — لذلك لا يُترجَم إلا النص المكتوب." });
+  bc_insecure:"⚠️ الميكروفون محظور: هذه الصفحة ليست على HTTPS. لبثّ صوت الإمام، افتح التطبيق على http://localhost:8000 (على حاسوب الخادم) أو عبر رابط HTTPS (نفق مثل ngrok). هنا يعمل الوضع اليدوي والخطبة فقط — لذلك لا يُترجَم إلا النص المكتوب." });
 
 /* --- Raisons du mode dégradé (traduction Gemini) --- */
 Object.assign(I18N.fr,{
@@ -1288,7 +1306,6 @@ function applyI18n(){
   renderHijriDate && renderHijriDate();
   tasbihRender && tasbihRender();
   prayerRenderHome && prayerRenderHome();
-  if(typeof libRender === "function"){ try{ libRender(); }catch(e){} }
 }
 
 /* ==========================================================================
@@ -1708,12 +1725,13 @@ const MIC_OK = (window.isSecureContext !== false)
    WebSocket avec reconnexion automatique + heartbeat
    ========================================================================== */
 class Reconnecting {
-  constructor(urlFn, onMsg, onState){
+  constructor(urlFn, onMsg, onState, opts){
     this.urlFn=urlFn; this.onMsg=onMsg; this.onState=onState;
-    this.ws=null; this.tries=0; this.alive=true; this.pingTimer=null; this._connect();
+    this.opts=opts||{};           // {sleepOnIdle:true} -> le serveur peut nous coucher (code 4001)
+    this.ws=null; this.tries=0; this.alive=true; this.sleeping=false; this.pingTimer=null; this._connect();
   }
   _connect(){
-    if(!this.alive) return;
+    if(!this.alive || this.sleeping) return;
     this.onState && this.onState("connecting");
     let ws; try{ ws=new WebSocket(this.urlFn()); }catch(e){ return this._retry(); }
     this.ws=ws;
@@ -1721,18 +1739,31 @@ class Reconnecting {
       this.pingTimer=setInterval(()=>{ try{ ws.send(JSON.stringify({type:"ping",t:Date.now()})); }catch(e){} }, 20000); };
     ws.onmessage=ev=>{ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
       if(m.type==="pong") return; this.onMsg(m); };
-    ws.onclose=()=>{ clearInterval(this.pingTimer); this.onState&&this.onState("closed"); this._retry(); };
+    ws.onclose=ev=>{
+      clearInterval(this.pingTimer);
+      if(this.sleeping) return;
+      this.onState&&this.onState("closed");
+      if(this.opts.sleepOnIdle && ev && ev.code===4001){
+        // Fermée par le serveur pour inactivité (écran éteint, onglet oublié) :
+        // pas de boucle de reconnexion inutile — on se réveillera au retour sur l'onglet.
+        this.sleeping=true; this.onState&&this.onState("sleep"); return;
+      }
+      this._retry();
+    };
     ws.onerror=()=>{ try{ ws.close(); }catch(e){} };
   }
   _retry(){
-    if(!this.alive) return;
+    if(!this.alive || this.sleeping) return;
     this.tries++;
     const delay=Math.min(1000*Math.pow(1.6,this.tries), 12000) + Math.random()*400;
     this.onState&&this.onState("reconnect");
     setTimeout(()=>this._connect(), delay);
   }
   send(obj){ try{ if(this.ws && this.ws.readyState===1){ this.ws.send(JSON.stringify(obj)); return true; } }catch(e){} return false; }
-  close(){ this.alive=false; clearInterval(this.pingTimer); try{ this.ws && this.ws.close(); }catch(e){} }
+  close(){ this.alive=false; this.sleeping=false; clearInterval(this.pingTimer); try{ this.ws && this.ws.close(); }catch(e){} }
+  wake(){ if(!this.alive) return; this.sleeping=false; this.tries=0;
+    if(this.ws && (this.ws.readyState===0 || this.ws.readyState===1)) return;  // déjà ouvert / ouverture
+    this._connect(); }
 }
 function wsBase(){ return (location.protocol==="https:"?"wss://":"ws://")+location.host; }
 
@@ -1771,8 +1802,48 @@ $("#btnTheme").addEventListener("click", ()=>{
 window.matchMedia && window.matchMedia("(prefers-color-scheme: light)")
   .addEventListener("change", ()=>{ if(!localStorage.getItem("theme")) updateThemeBtn(); });
 updateThemeBtn();
-$("#btnGoListen").addEventListener("click", ()=>{ show("screen-join"); });
 $("#btnGoBroadcast").addEventListener("click", ()=>{ show("screen-broadcaster"); });
+
+/* ---- Direct fixe de la mosquée : le même code/QR chaque vendredi ---- */
+let MAIN = null;
+let MAIN_POLL = null;
+const HAD_S_PARAM = !!new URLSearchParams(location.search).get("s");
+async function refreshMain(){
+  try{
+    const m = await jget(API+"/api/main");
+    MAIN = m;
+    const ln=$("#btnLiveNow"); if(ln) ln.classList.toggle("hidden", !m.live);
+    updateJoinStatus();
+  }catch(e){ /* serveur injoignable : on garde l'état précédent */ }
+}
+function startMainPoll(){
+  if(MAIN_POLL) return;
+  refreshMain();
+  MAIN_POLL = setInterval(refreshMain, 10000);
+}
+function usingMainCode(){
+  const c=($("#join-code").value||"").trim().toUpperCase();
+  return !c || (MAIN && c===MAIN.code);
+}
+function updateJoinStatus(){
+  const st=$("#join-status"); if(!st) return;
+  if(!MAIN || !usingMainCode()){ st.textContent=""; st.classList.add("hidden"); return; }
+  st.classList.remove("hidden");
+  if(MAIN.live) st.textContent="🔴 "+t("join_live");
+  else if(MAIN.status==="stopped") st.textContent=t("join_ended");
+  else st.textContent=t("join_waiting");
+}
+function openJoin(){
+  show("screen-join");
+  if(!HAD_S_PARAM && ($("#join-code").value||"").trim() && !usingMainCode()){
+    $("#join-code").value="";
+  }
+  refreshMain();   // met à jour la pastille d'état + la mosquée
+  if(usingMainCode() && MAIN && MAIN.code) peekSession(MAIN.code);
+  updateJoinStatus();
+}
+$("#btnGoListen").addEventListener("click", openJoin);
+const bn=$("#btnLiveNow"); if(bn) bn.addEventListener("click", openJoin);
 
 /* Chargement des langues supportées */
 jget(API+"/api/languages").then(d=>{ SUPPORTED=d.languages||[]; renderLangSelects(); }).catch(()=>{
@@ -1810,9 +1881,11 @@ async function peekSession(code){
   const p=new URLSearchParams(location.search); const s=p.get("s");
   if(s){ show("screen-join"); $("#join-code").value=s.toUpperCase(); peekSession(s.toUpperCase()); }
 })();
+startMainPoll();   // lancé dès le chargement : nourrit le badge « en direct » de l'accueil
 $("#join-code").addEventListener("change",e=>{
   const c=(e.target.value||"").trim().toUpperCase();
   if(/^[A-Z0-9]{4,8}$/.test(c)) peekSession(c);
+  updateJoinStatus();
 });
 
 /* ==========================================================================
@@ -1871,6 +1944,7 @@ $("#btnCreateSession").addEventListener("click", async ()=>{
       mosque_name: $("#bc-mosque").value.trim(),
       glossary: $("#bc-glossary").value.trim(),
       target_langs: langs,
+      fixed: true,   // réutilise le code permanent de la mosquée
     };
     const r = await fetch(API+"/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(r.status===429){ toast("Trop de sessions créées, réessayez dans 1 min"); $("#btnCreateSession").disabled=false; return; }
@@ -1879,7 +1953,7 @@ $("#btnCreateSession").addEventListener("click", async ()=>{
     BC.mosque=d.mosque_name||""; BC.langs=d.target_langs||langs;
     BC.joinUrl = d.join_url || (location.origin + "/?s=" + d.code);
     BC.shareable = (d.shareable !== false) && !/(^|\/\/)(localhost|127\.0\.0\.1)/i.test(BC.joinUrl);
-    $("#bc-code").textContent=d.code;
+    if($("#bc-code")) $("#bc-code").textContent=d.code;
     $("#bc-mosqueName").textContent=BC.mosque;
     $("#bc-qr").src=API+"/api/session/"+d.code+"/qr.png";
     $("#bc-joinUrl").textContent = BC.joinUrl;
@@ -2061,62 +2135,22 @@ $("#btnManualSend").addEventListener("click", ()=>{
   $("#bc-manualText").value="";
 });
 
-/* --- Bibliothèque de phrases fréquentes (diffuseur) --- */
-const DEFAULT_PHRASES = [
-  "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
-  "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
-  "وَالصَّلَاةُ وَالسَّلَامُ عَلَى رَسُولِ اللَّهِ ﷺ",
-  "أَمَّا بَعْدُ",
-  "أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ",
-  "يَا أَيُّهَا الَّذِينَ آمَنُوا اتَّقُوا اللَّهَ",
-  "اتَّقُوا اللَّهَ حَقَّ تُقَاتِهِ وَلَا تَمُوتُنَّ إِلَّا وَأَنْتُمْ مُسْلِمُونَ",
-  "قَالَ اللَّهُ تَعَالَى فِي كِتَابِهِ الْكَرِيمِ",
-  "قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ",
-  "عِبَادَ اللَّهِ، إِنَّ اللَّهَ يَأْمُرُ بِالْعَدْلِ وَالْإِحْسَانِ",
-  "بَارَكَ اللَّهُ لِي وَلَكُمْ فِي الْقُرْآنِ الْعَظِيمِ",
-  "أَقُولُ قَوْلِي هَذَا وَأَسْتَغْفِرُ اللَّهَ لِي وَلَكُمْ",
-  "اللَّهُمَّ اغْفِرْ لِلْمُؤْمِنِينَ وَالْمُؤْمِنَاتِ وَالْمُسْلِمِينَ وَالْمُسْلِمَاتِ",
-  "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
-  "أَقِيمُوا الصَّلَاةَ"
-];
-function libLoad(){
-  try{ const a=JSON.parse(localStorage.getItem("bcPhrases")); if(Array.isArray(a)) return a; }catch(e){}
-  return DEFAULT_PHRASES.slice();
-}
-function libSave(a){ try{ localStorage.setItem("bcPhrases", JSON.stringify(a)); }catch(e){} }
-function libSend(ph){
-  if(!ph) return;
-  if(BC.ws && BC.ws.send({type:"transcript", text:ph, is_final:true, manual:true})){
-    toast(t("bc_lib_sent"));
+/* --- Khotba : texte du prêche (diffuseur) --- */
+const KH_STORE = "bcKhotba";
+function khLoad(){ return localStorage.getItem(KH_STORE) || ""; }
+function khSave(v){ try{ localStorage.setItem(KH_STORE, v); }catch(e){} }
+function khSendAll(){
+  const txt = ($("#bc-kh-edit")||{value:""}).value || "";
+  if(!txt.trim()) return;
+  if(BC.ws && BC.ws.send({type:"transcript", text:txt.trim(), is_final:true, manual:true})){
+    toast(t("bc_kh_sent"));
   } else {
-    toast(t("bc_lib_nosession"));
+    toast(t("bc_kh_nosession"));
   }
 }
-function libRender(){
-  const box=$("#bc-lib"); if(!box) return;
-  const arr=libLoad();
-  box.innerHTML = arr.length ? arr.map((ph,i)=>
-    `<span class="pl-item">`
-    + `<button class="pl-send" data-i="${i}" title="${t('bc_lib_send')}">${escapeHtml(ph)}</button>`
-    + `<button class="pl-del" data-del="${i}" aria-label="${t('close')}" title="${t('close')}">×</button>`
-    + `</span>`
-  ).join("") : `<span class="muted" style="font-size:.8rem">—</span>`;
-  box.querySelectorAll(".pl-send").forEach(b=>b.addEventListener("click",()=>libSend(libLoad()[+b.dataset.i])));
-  box.querySelectorAll(".pl-del").forEach(b=>b.addEventListener("click",()=>{
-    const arr=libLoad(); arr.splice(+b.dataset.del,1); libSave(arr); libRender();
-  }));
-}
-$("#btnLibAdd") && $("#btnLibAdd").addEventListener("click",()=>{
-  const v=($("#bc-libNew").value||"").trim(); if(!v) return;
-  const arr=libLoad(); arr.push(v); libSave(arr); $("#bc-libNew").value=""; libRender();
-});
-$("#bc-libNew") && $("#bc-libNew").addEventListener("keydown",e=>{
-  if(e.key==="Enter"){ e.preventDefault(); $("#btnLibAdd").click(); }
-});
-$("#btnLibReset") && $("#btnLibReset").addEventListener("click",()=>{
-  libSave(DEFAULT_PHRASES.slice()); libRender();
-});
-libRender();
+const khEdit = $("#bc-kh-edit");
+if(khEdit){ khEdit.value = khLoad(); khEdit.addEventListener("input", ()=> khSave(khEdit.value)); }
+$("#btnKhSend") && $("#btnKhSend").addEventListener("click", khSendAll);
 
 /* --- VU-mètre micro --- */
 async function bcStartMeter(){
@@ -2299,7 +2333,7 @@ function stopLiveCapturing(){
    ========================================================================== */
 const LS = {
   code:null, lang:"fr", recv:"text", ws:null, status:"idle", mosque:"",
-  seenSeq:new Set(), history:[], autoscroll:true, lastSeq:0,
+  sleeping:false, seenSeq:new Set(), history:[], autoscroll:true, lastSeq:0,
   size:+localStorage.getItem("fontSize")||18,
   rate:+localStorage.getItem("voiceRate")||1.0,
   voiceURI:localStorage.getItem("voiceURI")||"",
@@ -2328,7 +2362,8 @@ $$("#set-modeSeg button").forEach(b=>b.addEventListener("click",()=>{
 }));
 
 $("#btnJoin").addEventListener("click", async ()=>{
-  const code=($("#join-code").value||"").trim().toUpperCase();
+  let code=($("#join-code").value||"").trim().toUpperCase();
+  if(!code && MAIN && MAIN.code) code=MAIN.code;   // par défaut : le direct fixe de la mosquée
   const err=$("#join-err");
   err.classList.add("hidden");
   if(!/^[A-Z0-9]{4,8}$/.test(code)){ err.textContent=t("join_err_code"); err.classList.remove("hidden"); return; }
@@ -2368,11 +2403,13 @@ function startListener(){
     lsOnMsg,
     st=>{
       const dot=$("#ls-connDot"), txt=$("#ls-connTxt");
-      if(st==="open"){ dot.className="dot live"; setConnText(); }
+      if(st==="open"){ dot.className="dot live"; LS.sleeping=false; setConnText(); }
       else if(st==="reconnect"){ dot.className="dot warn"; txt.textContent=t("conn_reconnect"); }
       else if(st==="connecting"){ dot.className="dot warn"; txt.textContent=t("conn_connecting"); }
+      else if(st==="sleep"){ LS.sleeping=true; dot.className="dot warn"; txt.textContent=t("conn_sleep"); }
       else { dot.className="dot off"; txt.textContent=t("conn_offline"); }
-    }
+    },
+    {sleepOnIdle:true}
   );
 }
 function setConnText(){
@@ -2907,6 +2944,13 @@ applySimple();  // reflète une préférence "mode simple" mémorisée
   }
   (function loop(){ tick(); setTimeout(loop, 1000 - (Date.now() % 1000)); })();
   document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "visible") tick(); });
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.visibilityState !== "visible") return;
+    if(typeof refreshMain === "function") refreshMain();
+    if(typeof LS !== "undefined" && LS && LS.ws && LS.sleeping && curScreen && curScreen()==="screen-listener"){
+      LS.ws.wake();   // onglet de nouveau visible : sort le WebSocket du sommeil
+    }
+  });
   const uiSel = document.getElementById("uiLang");
   if(uiSel) uiSel.addEventListener("change", tick);
 })();

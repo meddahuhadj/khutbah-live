@@ -67,6 +67,30 @@ IDLE_ROOM_TTL = int(os.getenv("IDLE_ROOM_TTL", str(20 * 60)))  # session jamais 
 MAX_ROOMS = int(os.getenv("MAX_ROOMS", "300"))     # plafond global (anti-DoS mémoire)
 SEG_QUEUE_MAX = int(os.getenv("SEG_QUEUE_MAX", "24"))  # backlog max de segments par room
 
+# --- Room fixe de la mosquée ------------------------------------------------
+# Le code / le QR ne changent JAMAIS d'un vendredi à l'autre : chaque fidèle
+# ne scann/télécharge qu'une seule fois, puis retrouve le prêche à la même URL.
+# Une seule instance = une seule mosquée => une seule room fixe.
+MAIN_ROOM_CODE = os.getenv("MAIN_ROOM_CODE", "JUMA5").strip().upper()
+MOSQUE_NAME = os.getenv("MOSQUE_NAME", "").strip()
+MOSQUE_GLOSSARY = os.getenv("MOSQUE_GLOSSARY", "").strip()
+MOSQUE_DEFAULT_LANGS = [
+    x.strip() for x in os.getenv("MOSQUE_DEFAULT_LANGS", "").split(",") if x.strip()
+]
+
+# Fermeture automatique des connexions WebSocket restées sans aucun message au
+# delà de ce délai (en secondes). Les clients émettent un `ping` toutes les 20 s :
+# une connexion qui dépasse ce seuil est un téléphone suspendu / oublié ouvert —
+# on la ferme pour libérer le serveur. Le client auditeur se réveille au retour
+# sur l'onglet et reprend la lecture (`since`, reprise de séquence).
+WS_IDLE_TTL = int(os.getenv("WS_IDLE_TTL", "120"))
+
+# Durée maximale de vie d'une connexion WebSocket (diffuseur ou auditeur),
+# même si elle reste active : passé ce délai on la ferme pour libérer le
+# serveur. Le client se reconnecte automatiquement ensuite. Les onglets
+# oubliés ne monopolisent donc jamais une connexion plus de 2 h.
+SESSION_HARD_TTL = int(os.getenv("SESSION_HARD_TTL", str(2 * 60 * 60)))  # 2 h
+
 # Langues proposées par l'interface. `ar` = flux original sans traduction.
 SUPPORTED_LANGUAGES: dict[str, str] = {
     "ar": "العربية (original)",
@@ -105,6 +129,8 @@ class Room:
         # lang -> set[WebSocket]
         self.listeners: dict[str, set[WebSocket]] = {}
         self.ws_lang: dict[WebSocket, str] = {}
+        # timestamp de connexion de chaque ws (purge après SESSION_HARD_TTL)
+        self.conn_ts: dict[WebSocket, float] = {}
         self.seq = 0
         self.history: deque[dict] = deque(maxlen=MAX_HISTORY)
         self.audio_source_level = 0.0
@@ -332,10 +358,16 @@ def _drop_room(code: str) -> None:
 
 
 def _purge_stale(now: float | None = None) -> int:
-    """Retire les rooms inactives (jamais démarrées, ou sans personne depuis longtemps)."""
+    """Retire les rooms inactives (jamais démarrées, ou sans personne depuis longtemps).
+
+    La room fixe de la mosquée est toujours conservée : c'est sur elle que les
+    fidèles reviennent chaque vendredi.
+    """
     now = now or time.time()
     removed = 0
     for code, room in list(ROOMS.items()):
+        if code == MAIN_ROOM_CODE:
+            continue
         empty = room.broadcaster is None and room.listener_count == 0
         if not empty:
             continue
@@ -345,6 +377,34 @@ def _purge_stale(now: float | None = None) -> int:
             _drop_room(code)
             removed += 1
     return removed
+
+
+def _close_expired_connections(now: float | None = None) -> int:
+    """Ferme les connexions WebSocket ouvertes depuis plus de SESSION_HARD_TTL.
+
+    Même une connexion « active » (pings réguliers) est fermée au bout de 2 h :
+    un téléphone laissé ouvert sur la page ne monopolisera jamais le serveur
+    plus longtemps. Les clients sont écrits pour se reconnecter tout seuls.
+    """
+    now = now or time.time()
+    closed = 0
+    for room in list(ROOMS.values()):
+        expired = [
+            ws for ws, ts in room.conn_ts.items() if now - ts > SESSION_HARD_TTL
+        ]
+        for ws in expired:
+            room.conn_ts.pop(ws, None)
+            if room.broadcaster is ws:
+                room.broadcaster = None
+            try:
+                asyncio.create_task(
+                    ws.close(code=4002, reason="session timeout")
+                )
+                closed += 1
+            except Exception:
+                pass
+        # la fermeture déclenche les blocs `finally` des handlers (drop_listener…)
+    return closed
 
 
 def create_room() -> Room:
@@ -361,12 +421,68 @@ def create_room() -> Room:
     raise RuntimeError("Impossible de générer un code de session unique")
 
 
+def get_main_room() -> Room:
+    """Room fixe de la mosquée (lazily créée à la première utilisation).
+
+    Son code ne change jamais ; elle est exemptée de la purge et survit aux
+    redémarrages de rooms. Les fidèles la rejoignent via le même lien chaque
+    vendredi, sans rescan du QR.
+    """
+    room = ROOMS.get(MAIN_ROOM_CODE)
+    if room is not None:
+        return room
+    if len(ROOMS) >= MAX_ROOMS:
+        _purge_stale()
+    if len(ROOMS) >= MAX_ROOMS:
+        raise RuntimeError("Trop de sessions actives pour créer la room fixe")
+    room = Room(MAIN_ROOM_CODE)
+    room.mosque_name = MOSQUE_NAME
+    room.glossary = MOSQUE_GLOSSARY
+    if MOSQUE_DEFAULT_LANGS:
+        room.default_langs = [
+            l for l in MOSQUE_DEFAULT_LANGS if l in SUPPORTED_LANGUAGES and l != "ar"
+        ] or list(DEFAULT_TARGET_LANGS)
+    ROOMS[MAIN_ROOM_CODE] = room
+    return room
+
+
+def reset_room(room: Room) -> None:
+    """Remet la room fixe à zéro pour un nouveau prêche (code inchangé).
+
+    Ferme proprement les connexions en cours : les auditeurs se reconnectent
+    automatiquement, repartent d'un historique vide et attendent le direct.
+    """
+    room.stop_worker()
+    room.live_stop()
+    if room.broadcaster is not None:
+        try:
+            asyncio.create_task(room.broadcaster.close(code=4402, reason="nouveau prêche"))
+        except Exception:
+            pass
+        room.broadcaster = None
+    for ws_set in list(room.listeners.values()):
+        for ws in list(ws_set):
+            try:
+                asyncio.create_task(ws.close(code=4402, reason="nouveau prêche"))
+            except Exception:
+                pass
+    room.listeners.clear()
+    room.ws_lang.clear()
+    room.conn_ts.clear()
+    room.seq = 0
+    room.history.clear()
+    room.status = "idle"
+    room.dropped_segments = 0
+    room.last_activity = time.time()
+
+
 async def _janitor():
-    """Purge périodique des sessions inactives."""
+    """Purge périodique des sessions et des connexions trop anciennes."""
     while True:
         await asyncio.sleep(120)
         try:
             _purge_stale()
+            _close_expired_connections()
         except Exception as exc:
             print(f"[janitor] {exc!r}")
 
@@ -767,6 +883,9 @@ async def healthz():
         "listeners": sum(r.listener_count for r in ROOMS.values()),
         "segments_total": sum(r.seq for r in ROOMS.values()),
         "segments_dropped": sum(r.dropped_segments for r in ROOMS.values()),
+        "main_room_code": MAIN_ROOM_CODE,
+        "main_room_status": ROOMS.get(MAIN_ROOM_CODE).status if MAIN_ROOM_CODE in ROOMS else "absent",
+        "ws_idle_ttl": WS_IDLE_TTL,
         "gemini": translator.has_api_key(),
         "translate_providers": translator.TRANSLATE_PROVIDERS,
         "translate_last_error": translator.last_error() or None,
@@ -781,6 +900,25 @@ async def healthz():
 @app.get("/api/languages")
 async def api_languages():
     return {"languages": [{"code": c, "name": n} for c, n in SUPPORTED_LANGUAGES.items()]}
+
+
+@app.get("/api/main")
+async def api_main():
+    """État de la room fixe de la mosquée (le « direct du vendredi »).
+
+    Le code est immuable : les fidèles peuvent s'y connecter à n'importe quel
+    moment — le serveur leur renvoie `status` (idle / live / paused / stopped).
+    """
+    room = get_main_room()
+    return {
+        "code": room.code,
+        "status": room.status,
+        "live": room.status == "live",
+        "mosque_name": room.mosque_name,
+        "listeners": room.listener_count,
+        "has_broadcaster": room.broadcaster is not None,
+        "seq": room.seq,
+    }
 
 
 # Rate limiting mémoire : créations de session par IP (fenêtre glissante).
@@ -817,14 +955,20 @@ async def api_create_session(request: Request):
     except (ValueError, json.JSONDecodeError):
         body = {}
 
-    room = create_room()
+    fixed = bool(body.get("fixed", False))
+    if fixed:
+        room = get_main_room()
+        reset_room(room)
+    else:
+        room = create_room()
     room.glossary = str(body.get("glossary") or "").strip()[:4000]
-    room.mosque_name = str(body.get("mosque_name") or "").strip()[:120]
+    room.mosque_name = (str(body.get("mosque_name") or "").strip()[:120]
+                        or MOSQUE_NAME)
     langs = body.get("target_langs") or []
     if isinstance(langs, list):
         room.default_langs = [
             l for l in langs if l in SUPPORTED_LANGUAGES and l != "ar"
-        ] or list(DEFAULT_TARGET_LANGS)
+        ] or list(MOSQUE_DEFAULT_LANGS) or list(DEFAULT_TARGET_LANGS)
 
     base = base_url(request)
     join_url = f"{base}/?s={room.code}"
@@ -838,6 +982,8 @@ async def api_create_session(request: Request):
         "gemini": translator.has_api_key(),
         "mosque_name": room.mosque_name,
         "target_langs": room.default_langs,
+        "fixed": fixed,
+        "main": fixed,
     }
 
 
@@ -982,6 +1128,7 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
         except Exception:
             pass
     room.broadcaster = ws
+    room.conn_ts[ws] = time.time()
     room.status = "live" if room.status in ("idle", "stopped") else room.status
     room.touch()
     await ws.send_text(json.dumps({
@@ -1002,7 +1149,17 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
 
     try:
         while True:
-            raw = await ws.receive_text()
+            try:
+                raw = await asyncio.wait_for(ws.receive_text(), timeout=WS_IDLE_TTL)
+            except asyncio.TimeoutError:
+                # Aucun message (même pas un ping) depuis trop longtemps : connexion
+                # abandonnée (écran suspendu, onglet fermé…). On ferme pour libérer
+                # le serveur ; le diffuseur se reconnecte automatiquement.
+                try:
+                    await ws.close(code=4001, reason="inactivity")
+                except Exception:
+                    pass
+                break
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
@@ -1099,6 +1256,7 @@ async def ws_broadcast(ws: WebSocket, code: str, token: str = Query("")):
     except Exception as exc:
         print(f"[ws_broadcast] {exc!r}")
     finally:
+        room.conn_ts.pop(ws, None)
         if room.broadcaster is ws:
             room.broadcaster = None
             room.status = "paused" if room.status == "live" else room.status
@@ -1124,6 +1282,7 @@ async def ws_listen(ws: WebSocket, code: str, lang: str = Query("fr"),
         lang = "fr"
     await ws.accept()
     await room.add_listener(ws, lang)
+    room.conn_ts[ws] = time.time()
 
     # Reprise de séquence : si le client se reconnecte avec `since`, on ne renvoie
     # que les phrases manquées ; sinon les dernières (nouvel arrivant).
@@ -1146,7 +1305,17 @@ async def ws_listen(ws: WebSocket, code: str, lang: str = Query("fr"),
 
     try:
         while True:
-            raw = await ws.receive_text()
+            try:
+                raw = await asyncio.wait_for(ws.receive_text(), timeout=WS_IDLE_TTL)
+            except asyncio.TimeoutError:
+                # Auditeur inactif (téléphone suspendu / onglet laissé ouvert) :
+                # on coupe la connexion pour libérer le serveur. Le client se
+                # réveille au retour sur l'onglet et reprend via `since`.
+                try:
+                    await ws.close(code=4001, reason="inactivity")
+                except Exception:
+                    pass
+                break
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
@@ -1178,6 +1347,7 @@ async def ws_listen(ws: WebSocket, code: str, lang: str = Query("fr"),
     except Exception as exc:
         print(f"[ws_listen] {exc!r}")
     finally:
+        room.conn_ts.pop(ws, None)
         await room.drop_listener(ws)
 
 
